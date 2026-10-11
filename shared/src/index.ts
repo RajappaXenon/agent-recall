@@ -5,3 +5,4 @@ export * from './schemas/agent.js';
 export * from './schemas/memory.js';
 export * from './schemas/integrations.js';
 export * from './schemas/search.js';
+export * from './schemas/tasks.js';

@@ -265,6 +265,7 @@ export default function SearchPlayground() {
           memories={selectedResults.map((r) => r.memory)}
           defaultAgentId={agents.data?.find((a) => a.name === 'Engineering Assistant')?.id ?? agents.data?.[0]?.id}
           onClose={() => setAnswering(false)}
+          onHoverMemory={setHovered}
           onSearchAgain={() => {
             setAnswering(false);
             setChecked(new Set());

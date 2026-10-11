@@ -39,7 +39,7 @@ const EnvSchema = z.object({
 
   LLM_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['anthropic']).default('anthropic')),
   LLM_API_KEY: optionalString,
-  LLM_MODEL: z.preprocess(emptyToUndefined, z.string().default('claude-sonnet-5-5')),
+  LLM_MODEL: z.preprocess(emptyToUndefined, z.string().default('claude-opus-5-5')),
 
   ELEVENLABS_API_KEY: optionalString,
   ELEVENLABS_VOICE_ID: optionalString,

@@ -57,7 +57,7 @@ const SHOTS = [
       const btn = page.getByRole('button', { name: /Run all/ });
       if (await btn.count()) {
         await btn.first().click();
-        await page.waitForSelector('[data-testid="results-ready"]', { timeout: 30_000 }).catch(() => {});
+        await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
         await page.waitForTimeout(900);
       }
     },
@@ -70,7 +70,7 @@ const SHOTS = [
       const btn = page.getByRole('button', { name: /Run all/ });
       if (await btn.count()) {
         await btn.first().click();
-        await page.waitForSelector('[data-testid="results-ready"]', { timeout: 30_000 }).catch(() => {});
+        await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
         await page.waitForTimeout(900);
         const row = page.locator('[data-column="hybrid"] [data-memory-id]').first();
         if (await row.count()) await row.hover();
@@ -87,14 +87,14 @@ const SHOTS = [
       const btn = page.getByRole('button', { name: /Run all/ });
       if (!(await btn.count())) return;
       await btn.first().click();
-      await page.waitForSelector('[data-testid="results-ready"]', { timeout: 30_000 }).catch(() => {});
+      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
       const boxes = page.locator('[data-column="hybrid"] button[role="checkbox"]');
       const n = Math.min(2, await boxes.count());
       for (let i = 0; i < n; i++) await boxes.nth(i).click();
       const use = page.getByRole('button', { name: /Use in agent task/ });
       if (await use.count()) {
         await use.first().click();
-        await page.waitForSelector('[data-testid="answer-ready"]', { timeout: 45_000 }).catch(() => {});
+        await page.waitForSelector('[data-testid="answer-ready"]', { state: 'attached', timeout: 45_000 }).catch(() => {});
         await page.waitForTimeout(400);
       }
     },
@@ -105,8 +105,29 @@ const SHOTS = [
     viewports: ['1440'],
     action: async (page) => {
       await page.getByRole('button', { name: /Run all/ }).first().click();
-      await page.waitForSelector('[data-testid="results-ready"]', { timeout: 30_000 }).catch(() => {});
+      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
       await page.waitForTimeout(900);
+    },
+  },
+  {
+    name: 'search-outcome',
+    path: '/search',
+    fullPage: true,
+    viewports: ['1440'],
+    action: async (page) => {
+      await page.getByRole('button', { name: /Run all/ }).first().click();
+      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
+      const boxes = page.locator('[data-column="hybrid"] button[role="checkbox"]');
+      for (let i = 0; i < Math.min(2, await boxes.count()); i++) await boxes.nth(i).click();
+      await page.getByRole('button', { name: /Use in agent task/ }).first().click();
+      await page.waitForSelector('[data-testid="answer-ready"]', { state: 'attached', timeout: 45_000 }).catch(() => {});
+      await page.getByRole('button', { name: 'Worked', exact: true }).click();
+      await page.getByRole('button', { name: 'Helpful', exact: true }).click();
+      await page.getByLabel('Notes').fill('Raised maxPoolSize to 80 and closed export cursors; p99 back under 200 ms.');
+      await page.getByRole('button', { name: 'Record outcome' }).click();
+      await page.waitForSelector('[data-testid="created-memory"]', { timeout: 30_000 }).catch(() => {});
+      await page.getByText('Searchable', { exact: true }).waitFor({ timeout: 30_000 }).catch(() => {});
+      await page.waitForTimeout(300);
     },
   },
   { name: 'agents', path: '/agents', fullPage: true },
@@ -214,7 +235,7 @@ async function main() {
   const ready = await fetch(`${API}/api/ready`).then((r) => r.json()).catch(() => null);
   console.log(`Atlas: ${ready?.mongo?.connected ? `connected (${ready.mongo.latencyMs} ms)` : `NOT connected — ${ready?.mongo?.detail ?? 'unknown'}`}`);
 
-  await rm(outDir, { recursive: true, force: true });
+  if (!only) await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
   const browser = await chromium.launch();

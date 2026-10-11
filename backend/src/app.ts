@@ -18,6 +18,8 @@ import integrationRoutes from './routes/integrations.js';
 import agentRoutes from './routes/agents.js';
 import memoryRoutes from './routes/memories.js';
 import searchRoutes from './routes/search.js';
+import taskRoutes from './routes/tasks.js';
+import './services/llm/index.js';
 import './services/embeddings.js';
 
 export async function buildApp(opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
@@ -61,6 +63,7 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
       await api.register(agentRoutes);
       await api.register(memoryRoutes);
       await api.register(searchRoutes);
+      await api.register(taskRoutes);
     },
     { prefix: '/api' },
   );

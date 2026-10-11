@@ -21,7 +21,12 @@ export const REGULAR_INDEXES: Record<string, IndexDescription[]> = {
   [COLLECTIONS.stepExecutions]: [{ key: { taskId: 1, stepIndex: 1 } }],
   [COLLECTIONS.events]: [{ key: { orgId: 1, createdAt: -1 } }, { key: { orgId: 1, type: 1, createdAt: -1 } }],
   [COLLECTIONS.retrievalLogs]: [{ key: { orgId: 1, createdAt: -1 } }],
-  [COLLECTIONS.outcomes]: [{ key: { orgId: 1, taskId: 1 } }, { key: { orgId: 1, createdAt: -1 } }],
+  [COLLECTIONS.outcomes]: [
+    { key: { orgId: 1, taskId: 1 } },
+    { key: { orgId: 1, createdAt: -1 } },
+    // One outcome per task (prevents double-recording under concurrent submits).
+    { key: { taskId: 1, orgId: 1 }, unique: true, name: 'outcome_once_per_task' },
+  ],
 };
 
 export async function ensureRegularIndexes(): Promise<{ collection: string; indexes: string[] }[]> {

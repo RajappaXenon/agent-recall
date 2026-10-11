@@ -133,3 +133,45 @@ npx vitest run (backend), npm test, npm run typecheck, npm run lint, npm run bui
 npm run screenshots -w frontend -- --only=search   (×2), --only=search-hover
 curl POST /api/search/{keyword,semantic,hybrid} with the demo query
 ```
+
+## Phase 3 — Learning loop (2026-10-11)
+
+### Done
+- LLM provider (`services/llm/`): Anthropic Messages API via `@anthropic-ai/sdk` 0.133. Checked against the bundled Claude API reference: default model `claude-opus-5-5` (`.env.example`, config default and the user's `.env` corrected from my earlier `claude-sonnet-5-5`), thinking omitted (always adaptive on this model), `output_config.effort: "medium"` set explicitly, 30 s timeout, server-side refusal fallback enabled (`server-side-fallback-2026-07-01`, `fallbacks: "default"`), `stop_reason: "refusal"` handled. Typed SDK errors mapped to `{ code, message }`; provider bodies never reach clients. Token-free connectivity probe (`models.retrieve`).
+- Prompt safety: memories go in as `<memory id type verification>` blocks; the system prompt states memory text is reference data and never instructions; `</memory>` inside content is escaped; citations are kept only if they reference a supplied id.
+- Without `LLM_API_KEY`: extractive answer labelled "Template answer (LLM not configured)", model `template (no LLM)`, shown with a warning badge in the UI.
+- `POST /api/answers` (qa task: running → completed/failed with output), `GET /api/tasks`, `GET /api/tasks/:id` (with outcome), `GET /api/tasks/:id/checkpoints`, `POST /api/tasks/:id/outcome`.
+- Outcome rules (`services/outcomes.ts`): outcome insert + usefulness + procedural verification in one MongoDB transaction; worked → `verified_success`; failed → `verified_failure` only if never verified successful (otherwise the failure is appended to `outcomeIds`); only procedural memories are verified; new episodic memory ("Resolved: …" / "Attempted, failed: …") with `provenance: { kind: "outcome", outcomeId, citedMemoryIds }` and `sourceTaskId`, embedded; events for each change. Unique index `outcome_once_per_task` → second outcome is a 409.
+- `GET /api/memories/:id/searchable` drives "Indexing…" → "Searchable" in the UI.
+- Playground answer flow: agent picker, answer with numbered citation chips (hover highlights the memory in the evidence list and in all three result columns), evidence list with Cited / Not cited, Listen (disabled with reason until ElevenLabs), Regenerate, "Did this work?" (Worked / Failed, Helpful / Not helpful, notes), outcome summary with verification changes, new memory card with live searchable state, "Search again".
+- `npm run demo:e2e -w backend`: §0 steps 1–6 through the Fastify routes (inject: same auth/validation/handlers as HTTP).
+
+### Gate — `npm run demo:e2e -w backend` (real output, abbreviated)
+```
+Step 2  keyword  engine=atlas_search        #1 Checkout API timed out… search 25.73 · #3 Fix connection pool exhaustion… verified_success
+        semantic engine=atlas_vector_search #1 Checkout API timed out… vector 0.7991 · #2 Resolved: checkout timeouts gone…
+        hybrid   engine=rrf                 #1 Fix connection pool exhaustion… final 0.0365 [K3·S3] verified_success
+Step 3  mode=template · model=template (no LLM) · citations: 3
+Step 4  outcome … result=worked · usefulness updated on 3 memories
+Step 5  new memory "Resolved: Our API started timing out after a database connection pool change"
+        type=episodic provenance=outcome embedding=ready
+        verification: "Fix connection pool exhaustion…" verified_success → verified_success (Already verified; outcome added as further evidence)
+        searchable after 1.2 s (keyword=true, vector=true)
+Step 6  new outcome memory: hybrid rank 1 (keyword #1, semantic #1, policy ×1.15)
+        outcome policy on vs off: 7 of 10 results change position
+✔ demo:e2e finished in 5.7s
+```
+- Tests: backend `Test Files 5 passed (5) · Tests 33 passed (33)` (adds `outcomes.integration.test.ts`: worked/failed rules, never un-verify, procedural only, 409 on second outcome, cross-tenant 404). Test env forces `LLM_API_KEY=''` so tests never call a paid model.
+
+### Notes / not done
+- `LLM_API_KEY` is empty, so the live LLM path is not verified yet (template path verified). Integration status reports `llm: not_configured`.
+- SPEC §0 says the cited procedure "becomes verified" while §13 seeds it as already `verified_success`; following §13, the demo outcome adds evidence (outcomeIds 1 → 2) rather than flipping status. The flip itself is covered by `outcomes.integration.test.ts`.
+- `demo:reset` run after the gate so the demo org is back to seed state.
+
+### Commands run
+```
+npm install @anthropic-ai/sdk -w backend
+npm run demo:e2e -w backend (×2), npm run demo:reset -w backend (×3)
+npm test, npm run typecheck, npm run lint
+node frontend/scripts/screenshots.mjs --only=search-a / --only=search-outcome
+```
