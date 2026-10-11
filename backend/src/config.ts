@@ -44,7 +44,7 @@ const EnvSchema = z.object({
 
   // Groq (OpenAI-compatible): used when no Anthropic key is set, and as the fallback when an Anthropic call fails.
   GROQ_API_KEY: optionalString,
-  GROQ_MODEL: z.preprocess(emptyToUndefined, z.string().default('llama-3.3-70b-versatile')),
+  GROQ_MODEL: z.preprocess(emptyToUndefined, z.string().default('openai/gpt-oss-120b')),
   GROQ_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().default('https://api.groq.com/openai/v1')),
 
   ELEVENLABS_API_KEY: optionalString,

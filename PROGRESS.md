@@ -427,3 +427,9 @@ screenshots         → 46 captured, no "did not appear" warnings (React Router 
 - Groq errors map to the same codes; provider bodies stay in server logs; Groq calls count toward the LLM budget.
 - Tests: `test/llm-providers.test.ts` (fetch stubbed, no network): Groq-only, Anthropic no-credit → Groq, refusal not retried, `LLM_PROVIDER=groq`, template. Full suite: backend 45/45, frontend 2/2; typecheck, lint, build pass.
 - Not verified live yet: needs `GROQ_API_KEY` in `.env`.
+
+### Groq verified live (2026-10-11)
+- Account key cannot access `llama-3.3-70b-versatile` (Groq 404 `model_not_found`); `GET /models` showed `openai/gpt-oss-120b` available → default changed to `openai/gpt-oss-120b` (code, `.env.example`, `render.yaml`, README, user `.env` GROQ_MODEL line). gpt-oss requests send `reasoning_effort: "low"`, `include_reasoning: false`, `max_completion_tokens: 4000`.
+- Fixed: probe URL-encoded the `/` in the model id (false "not found"); gpt-oss cites as `【mem:id】` → citations normalised to `[mem:id]` for every provider (unit test); answer panel renders `**bold**` and `` `code` `` safely.
+- Live: probe `connected — Groq reachable · openai/gpt-oss-120b (179 ms)`; `/api/answers` provider=groq, ~1.2 s, 2/3 memories cited; `demo:e2e` all steps with the Groq answer; UI header "Groq · openai/gpt-oss-120b", citation chips working.
+- Full suite: backend 46/46, frontend 2/2; typecheck, lint, build pass. Demo data reset.

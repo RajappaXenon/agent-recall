@@ -76,10 +76,19 @@ export function renderMemories(memories: GroundingMemory[]): string {
 }
 
 /** Keeps only citations that refer to memories actually supplied. */
+/**
+ * Models don't all follow the citation format literally (gpt-oss writes 【mem:id】, others add a
+ * space after the colon). Rewrite every variant to the canonical [mem:<id>] the UI renders.
+ */
+export function normalizeCitations(text: string): string {
+  return text.replace(/[[【(]\s*mem\s*:\s*([a-f0-9]{24})\s*[\]】)]/g, '[mem:$1]');
+}
+
+/** Keeps only citations that refer to memories actually supplied. */
 export function extractCitations(text: string, allowed: string[]): string[] {
   const set = new Set(allowed);
   const found: string[] = [];
-  for (const m of text.matchAll(/\[mem:([a-f0-9]{24})\]/g)) {
+  for (const m of normalizeCitations(text).matchAll(/\[mem:([a-f0-9]{24})\]/g)) {
     if (set.has(m[1]!) && !found.includes(m[1]!)) found.push(m[1]!);
   }
   return found;
@@ -107,10 +116,12 @@ async function anthropicAnswer(query: string, memories: GroundingMemory[]): Prom
     if (res.stop_reason === 'refusal') {
       throw new LlmError('The model declined to answer this request.', 'LLM_REFUSED');
     }
-    const text = res.content
-      .flatMap((b) => (b.type === 'text' ? [b.text] : []))
-      .join('')
-      .trim();
+    const text = normalizeCitations(
+      res.content
+        .flatMap((b) => (b.type === 'text' ? [b.text] : []))
+        .join('')
+        .trim(),
+    );
     const servedByFallback = (res.usage.iterations ?? []).some((i) => i.type === 'fallback_message');
     return {
       answer: text,
@@ -173,7 +184,7 @@ async function groqAnswer(query: string, memories: GroundingMemory[]): Promise<A
   try {
     const r = await groqChat(SYSTEM_PROMPT, `${renderMemories(memories)}\n\nQuestion: ${query}`);
     return {
-      answer: r.text,
+      answer: normalizeCitations(r.text),
       citations: extractCitations(r.text, memories.map((m) => m.id)),
       model: r.model,
       mode: 'llm',

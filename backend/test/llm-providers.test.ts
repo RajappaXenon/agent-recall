@@ -11,7 +11,7 @@ const original = { llm: config.LLM_API_KEY, groq: config.GROQ_API_KEY, provider:
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const groqOk = () =>
   json(200, {
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-120b',
     choices: [{ message: { content: `Raise the pool size [mem:${'a'.repeat(24)}].` }, finish_reason: 'stop' }],
     usage: { prompt_tokens: 120, completion_tokens: 12 },
   });

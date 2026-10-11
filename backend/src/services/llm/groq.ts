@@ -29,6 +29,7 @@ interface ChatResponse {
 }
 
 const base = () => config.GROQ_BASE_URL.replace(/\/$/, '');
+const isReasoningModel = () => /^openai\/gpt-oss/.test(config.GROQ_MODEL);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function groqChat(system: string, user: string): Promise<{ text: string; model: string; inputTokens: number; outputTokens: number }> {
@@ -46,8 +47,11 @@ export async function groqChat(system: string, user: string): Promise<{ text: st
             { role: 'system', content: system },
             { role: 'user', content: user },
           ],
-          max_completion_tokens: 1500,
+          // Generous: for reasoning models the budget may also cover hidden reasoning.
+          max_completion_tokens: 4000,
           temperature: 0.2,
+          // gpt-oss reasoning models: keep reasoning short and out of the response (docs: reasoning_effort, include_reasoning).
+          ...(isReasoningModel() ? { reasoning_effort: 'low', include_reasoning: false } : {}),
         }),
         signal: AbortSignal.timeout(30_000),
       });
@@ -61,8 +65,14 @@ export async function groqChat(system: string, user: string): Promise<{ text: st
     }
     if (res.ok) {
       const json = (await res.json()) as ChatResponse;
-      const text = json.choices[0]?.message.content?.trim() ?? '';
-      if (!text) throw new GroqError('Groq returned an empty answer.', 'LLM_ERROR');
+      const choice = json.choices[0];
+      const text = choice?.message.content?.trim() ?? '';
+      if (!text) {
+        throw new GroqError(
+          choice?.finish_reason === 'length' ? 'Groq stopped at the token limit before writing an answer.' : 'Groq returned an empty answer.',
+          'LLM_ERROR',
+        );
+      }
       return { text, model: json.model, inputTokens: json.usage?.prompt_tokens ?? 0, outputTokens: json.usage?.completion_tokens ?? 0 };
     }
     // Provider bodies stay in server logs (scrubbed); clients get a fixed reason.
@@ -90,7 +100,9 @@ export async function groqChat(system: string, user: string): Promise<{ text: st
 export async function probeGroq(): Promise<{ ok: true; model: string; latencyMs: number } | { ok: false; detail: string }> {
   const start = performance.now();
   try {
-    const res = await fetch(`${base()}/models/${encodeURIComponent(config.GROQ_MODEL)}`, {
+    // Model ids contain '/' (e.g. openai/gpt-oss-120b): encode each segment, keep the slash.
+    const path = config.GROQ_MODEL.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(`${base()}/models/${path}`, {
       headers: { Authorization: `Bearer ${config.GROQ_API_KEY}` },
       signal: AbortSignal.timeout(10_000),
     });

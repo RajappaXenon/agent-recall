@@ -76,3 +76,16 @@ describe('paid-provider budget', () => {
     resetBudgets();
   });
 });
+
+import { normalizeCitations } from '../src/services/llm/index.js';
+
+describe('citation formats from different models', () => {
+  it('normalises 【mem:id】, [mem: id] and (mem:id) to [mem:id] and extracts them', () => {
+    const a = 'a'.repeat(24);
+    const b = 'b'.repeat(24);
+    const c = 'c'.repeat(24);
+    const text = `Fix it【mem:${a}】. Also [mem: ${b}] and (mem:${c}).`;
+    expect(normalizeCitations(text)).toBe(`Fix it[mem:${a}]. Also [mem:${b}] and [mem:${c}].`);
+    expect(extractCitations(text, [a, b, c])).toEqual([a, b, c]);
+  });
+});

@@ -19,6 +19,23 @@ import { LatencyChip } from '@/components/ui/latency-chip';
 import { toast } from '@/components/ui/toast';
 
 /** Splits answer text into plain text and [mem:id] citation chips (numbered by first appearance). */
+/**
+ * Minimal inline Markdown for model answers: **bold** and `code`. Builds React elements
+ * (never HTML), so model output can't inject markup. Everything else stays plain text.
+ */
+function renderInline(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g).map((seg, i) => {
+    if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) return <strong key={i} className="font-semibold">{seg.slice(2, -2)}</strong>;
+    if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2)
+      return (
+        <code key={i} className="rounded-[4px] bg-surface-raised px-1 py-px font-mono text-[0.9em]">
+          {seg.slice(1, -1)}
+        </code>
+      );
+    return <React.Fragment key={i}>{seg}</React.Fragment>;
+  });
+}
+
 function AnswerText({
   text,
   memories,
@@ -34,7 +51,7 @@ function AnswerText({
     <div className="max-w-prose whitespace-pre-wrap text-body leading-6 text-text">
       {parts.map((p, i) => {
         const m = p.match(/^\[mem:([a-f0-9]{24})\]$/);
-        if (!m) return <React.Fragment key={i}>{p}</React.Fragment>;
+        if (!m) return <React.Fragment key={i}>{renderInline(p)}</React.Fragment>;
         const id = m[1]!;
         if (!order.includes(id)) order.push(id);
         const n = order.indexOf(id) + 1;
