@@ -9,6 +9,6 @@ export default defineConfig({
     fileParallelism: false,
     reporters: ['verbose'],
     // Tests never call paid LLM / TTS providers: answers use the deterministic template path.
-    env: { LLM_API_KEY: '', ELEVENLABS_API_KEY: '' },
+    env: { LLM_API_KEY: '', GROQ_API_KEY: '', ELEVENLABS_API_KEY: '' },
   },
 });

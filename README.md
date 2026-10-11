@@ -16,7 +16,7 @@ Built for the MongoDB "Harness Engineering & Model Wrangling" hackathon.
 | | |
 |---|---|
 | **Search Playground** | One query through keyword, semantic and hybrid retrieval side by side. The Retrieval Trace draws how each memory's keyword and semantic ranks fuse into its hybrid rank. Every result explains why it came back. |
-| **Grounded answers** | Answers are grounded in selected memories, which go into the prompt as untrusted `<memory>` blocks, and the answer cites them. The model is Claude (`claude-opus-5-5` by default). Without an LLM key, the answer is a clearly labelled template answer. |
+| **Grounded answers** | Answers are grounded in selected memories, which go into the prompt as untrusted `<memory>` blocks, and the answer cites them. The model is Claude (`claude-opus-5-5`) or Groq (`llama-3.3-70b-versatile`), with Groq as the automatic fallback. Without any LLM key, the answer is a clearly labelled template answer. |
 | **Learning loop** | "Did this work?" records an outcome. A successful outcome verifies the cited procedure, the outcome becomes a new episodic memory, and the outcome policy `final = rrf × (1 + 0.15·s)` ranks verified procedures higher. No model weights change. |
 | **Crash-safe tasks** | The worker claims tasks with a lease and commits a checkpoint and the step advance in one transaction. If the worker is killed mid-run, another worker resumes from the last checkpoint. |
 | **Honest UI** | Every number is computed from stored data. Engine pills and fallback warnings are always shown, seeded records carry a "Demo data" badge, and integrations are "connected" only after a live probe. |
@@ -81,7 +81,7 @@ Open http://localhost:5173. Demo auth signs you in automatically. It is **not pr
 See `.env.example`.
 - **Required:** `MONGODB_URI`, `DB_NAME`, `JWT_SECRET`, `FRONTEND_URL`.
 - **Semantic search:** `VOYAGE_API_KEY`, `VOYAGE_MODEL` (`voyage-3.5`), `VOYAGE_DIMENSIONS` (1024) and `VOYAGE_BASE_URL`. Atlas "model API keys" use `https://ai.mongodb.com/v1`.
-- **LLM answers:** `LLM_API_KEY`, `LLM_MODEL`.
+- **LLM answers:** `LLM_API_KEY` and `LLM_MODEL` for Anthropic, and/or `GROQ_API_KEY` and `GROQ_MODEL` (default `llama-3.3-70b-versatile`) for Groq. With only a Groq key, Groq answers. With both, Anthropic answers and Groq takes over if an Anthropic call fails (no credit, bad key, rate limit, outage; never on a refusal). `LLM_PROVIDER=groq` makes Groq the first choice.
 - **Optional audio:** `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`.
 - **Worker and demo:** `DEMO_MODE` enables the crash button. `LEASE_MS` and `DEMO_STEP_DELAY_MS` tune the worker.
 - **DNS:** if Node cannot resolve `mongodb+srv` records (`querySrv ECONNREFUSED`), set `DNS_SERVERS`.

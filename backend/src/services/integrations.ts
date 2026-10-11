@@ -23,7 +23,7 @@ const NAMES: Record<IntegrationKey, string> = {
   atlas_search: 'Atlas Search',
   atlas_vector_search: 'Atlas Vector Search',
   voyage: 'Voyage AI embeddings',
-  llm: 'LLM (Anthropic)',
+  llm: 'LLM (Anthropic / Groq)',
   elevenlabs: 'ElevenLabs audio',
 };
 const OPTIONAL: Partial<Record<IntegrationKey, boolean>> = { elevenlabs: true };

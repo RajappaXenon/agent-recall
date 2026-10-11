@@ -50,6 +50,8 @@ export const AnswerResponseSchema = z.object({
   citations: z.array(IdSchema),
   model: z.string(),
   mode: z.enum(['llm', 'template']),
+  provider: z.enum(['anthropic', 'groq', 'template']),
+  fallbackReason: z.string().optional(),
   latencyMs: z.number(),
   servedBy: z.string().optional(),
 });

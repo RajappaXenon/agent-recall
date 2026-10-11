@@ -37,7 +37,7 @@ const SETUP: Record<IntegrationKey, React.ReactNode> = {
   ),
   llm: (
     <>
-      Set <Cmd>LLM_API_KEY</Cmd> (Anthropic) and optionally <Cmd>LLM_MODEL</Cmd>. Without it, answers are labelled template answers.
+      Set <Cmd>LLM_API_KEY</Cmd> (Anthropic) and/or <Cmd>GROQ_API_KEY</Cmd> (optionally <Cmd>GROQ_MODEL</Cmd>). With only a Groq key, Groq answers; with both, Groq is the fallback when an Anthropic call fails. With neither, answers are labelled template answers.
     </>
   ),
   elevenlabs: (

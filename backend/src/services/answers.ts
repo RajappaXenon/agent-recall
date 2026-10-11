@@ -43,7 +43,16 @@ export async function createAnswer(orgId: ObjectId, req: AnswerRequest, actor: A
         status: 'completed',
         currentStep: 1,
         steps: [{ name: 'Grounded answer', status: 'completed' }],
-        output: { answer: result.answer, citations: result.citations, model: result.model, mode: result.mode, latencyMs: result.latencyMs, usage: result.usage ?? null },
+        output: {
+          answer: result.answer,
+          citations: result.citations,
+          model: result.model,
+          mode: result.mode,
+          provider: result.provider,
+          fallbackReason: result.fallbackReason ?? null,
+          latencyMs: result.latencyMs,
+          usage: result.usage ?? null,
+        },
         completedAt: new Date(),
       },
     });
@@ -54,7 +63,7 @@ export async function createAnswer(orgId: ObjectId, req: AnswerRequest, actor: A
       summary: `${result.mode === 'llm' ? 'Grounded answer' : 'Template answer'} for "${req.query.slice(0, 80)}" citing ${result.citations.length} memories`,
       agentId: agent._id,
       taskId: task._id,
-      details: { model: result.model, mode: result.mode, latencyMs: result.latencyMs, citations: result.citations },
+      details: { model: result.model, provider: result.provider, mode: result.mode, fallbackReason: result.fallbackReason ?? null, latencyMs: result.latencyMs, citations: result.citations },
     });
     return {
       taskId: task._id.toHexString(),
@@ -63,6 +72,8 @@ export async function createAnswer(orgId: ObjectId, req: AnswerRequest, actor: A
       model: result.model,
       mode: result.mode,
       latencyMs: result.latencyMs,
+      provider: result.provider,
+      ...(result.fallbackReason ? { fallbackReason: result.fallbackReason } : {}),
       ...(result.servedBy ? { servedBy: result.servedBy } : {}),
     };
   } catch (err) {

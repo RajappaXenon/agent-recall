@@ -141,7 +141,18 @@ export function AnswerFlow({
         meta={
           data && (
             <>
-              {data.mode === 'template' ? <Badge tone="warning">Template answer (LLM not configured)</Badge> : <Badge>{data.model}</Badge>}
+              {data.mode === 'template' ? (
+                <Badge tone="warning">Template answer (LLM not configured)</Badge>
+              ) : (
+                <Badge title={`Provider: ${data.provider === 'groq' ? 'Groq' : 'Anthropic'}`}>
+                  {data.provider === 'groq' ? 'Groq' : 'Claude'} · {data.model}
+                </Badge>
+              )}
+              {data.fallbackReason && (
+                <Badge tone="warning" title={data.fallbackReason}>
+                  Fallback provider
+                </Badge>
+              )}
               {data.mode === 'llm' && <LatencyChip ms={data.latencyMs} />}
               {data.servedBy && <Badge tone="warning">Served by fallback model {data.servedBy}</Badge>}
             </>

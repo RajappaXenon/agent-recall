@@ -418,3 +418,12 @@ screenshots         → 46 captured, no "did not appear" warnings (React Router 
 - **Seeding:** running `npm run seed` alone (without `demo:reset`) resets seed verification while live outcomes still cite those memories.
 - **Unverified and undeployed:** the Anthropic path is still unverified (no `LLM_API_KEY`), and nothing is deployed.
 - **Dev dependencies:** the Tailwind 3 advisories remain.
+
+## Groq LLM provider (2026-10-11)
+
+- Added Groq (OpenAI-compatible, checked against console.groq.com/docs) as an LLM provider: `GROQ_API_KEY`, `GROQ_MODEL` (default `llama-3.3-70b-versatile`), `GROQ_BASE_URL`.
+- Order: preferred provider (`LLM_PROVIDER`, default anthropic) if its key is set, then the other. Anthropic → Groq fallback on auth, billing ("credit balance too low"), rate limit, timeout or outage; never on a refusal. No keys → labelled template answer.
+- Answers carry `provider` and `fallbackReason`; the UI badge shows "Claude · model" or "Groq · model" and "Fallback provider". Integration probe reports the provider in use (token-free `GET /models/{model}`).
+- Groq errors map to the same codes; provider bodies stay in server logs; Groq calls count toward the LLM budget.
+- Tests: `test/llm-providers.test.ts` (fetch stubbed, no network): Groq-only, Anthropic no-credit → Groq, refusal not retried, `LLM_PROVIDER=groq`, template. Full suite: backend 45/45, frontend 2/2; typecheck, lint, build pass.
+- Not verified live yet: needs `GROQ_API_KEY` in `.env`.

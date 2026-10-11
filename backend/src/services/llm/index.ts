@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../config.js';
 import { registerProbe } from '../integrations.js';
 import { spendBudget } from '../../lib/cost-guard.js';
+import { GroqError, groqChat, isGroqConfigured, probeGroq } from './groq.js';
 
 export interface GroundingMemory {
   id: string;
@@ -21,26 +22,38 @@ export interface AnswerResult {
   usage?: { inputTokens: number; outputTokens: number };
   /** Set when a server-side fallback model produced the answer. */
   servedBy?: string;
+  /** Which provider produced the answer. */
+  provider: 'anthropic' | 'groq' | 'template';
+  /** Set when the preferred provider failed and another one answered. */
+  fallbackReason?: string;
 }
 
 export class LlmError extends Error {
   constructor(
     message: string,
-    public readonly code: 'LLM_TIMEOUT' | 'LLM_RATE_LIMITED' | 'LLM_AUTH' | 'LLM_REFUSED' | 'LLM_ERROR',
+    public readonly code: 'LLM_TIMEOUT' | 'LLM_RATE_LIMITED' | 'LLM_AUTH' | 'LLM_BILLING' | 'LLM_REFUSED' | 'LLM_ERROR',
   ) {
     super(message);
     this.name = 'LlmError';
   }
 }
 
+const isAnthropicConfigured = () => Boolean(config.LLM_API_KEY);
+
+/** True when any real model (Anthropic or Groq) is configured. */
 export function isLlmConfigured() {
-  return Boolean(config.LLM_API_KEY);
+  return isAnthropicConfigured() || isGroqConfigured();
 }
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
   if (!client) client = new Anthropic({ apiKey: config.LLM_API_KEY, timeout: 30_000, maxRetries: 1 });
   return client;
+}
+
+/** Tests: the SDK captures `fetch` and the key at construction, so stubs need a fresh client. */
+export function resetLlmClientForTests() {
+  client = null;
 }
 
 /** Memory text is untrusted: it is quoted as data and the system prompt says it is never instructions. */
@@ -106,6 +119,7 @@ async function anthropicAnswer(query: string, memories: GroundingMemory[]): Prom
       mode: 'llm',
       latencyMs: Math.round(performance.now() - start),
       usage: { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens },
+      provider: 'anthropic',
       ...(servedByFallback ? { servedBy: res.model } : {}),
     };
   } catch (err) {
@@ -116,6 +130,8 @@ async function anthropicAnswer(query: string, memories: GroundingMemory[]): Prom
       throw new LlmError('The LLM provider rejected the API key. Check LLM_API_KEY.', 'LLM_AUTH');
     if (err instanceof Anthropic.NotFoundError) throw new LlmError(`Model ${config.LLM_MODEL} was not found. Check LLM_MODEL.`, 'LLM_ERROR');
     if (err instanceof Anthropic.RateLimitError) throw new LlmError('The LLM provider is rate limiting requests. Retry shortly.', 'LLM_RATE_LIMITED');
+    if (err instanceof Anthropic.BadRequestError && /credit balance|billing/i.test(err.message))
+      throw new LlmError('The Anthropic account has no credit available.', 'LLM_BILLING');
     if (err instanceof Anthropic.APIError) throw new LlmError(`The LLM provider returned an error (HTTP ${err.status ?? 'n/a'}).`, 'LLM_ERROR');
     if (err instanceof Anthropic.APIConnectionError) throw new LlmError('Could not reach the LLM provider.', 'LLM_ERROR');
     throw new LlmError('The LLM call failed.', 'LLM_ERROR');
@@ -146,25 +162,89 @@ export function templateAnswer(query: string, memories: GroundingMemory[]): Answ
     citations: sorted.map((m) => m.id),
     model: 'template (no LLM)',
     mode: 'template',
+    provider: 'template',
     latencyMs: Math.round(performance.now() - start),
   };
 }
 
+async function groqAnswer(query: string, memories: GroundingMemory[]): Promise<AnswerResult> {
+  spendBudget('llm');
+  const start = performance.now();
+  try {
+    const r = await groqChat(SYSTEM_PROMPT, `${renderMemories(memories)}\n\nQuestion: ${query}`);
+    return {
+      answer: r.text,
+      citations: extractCitations(r.text, memories.map((m) => m.id)),
+      model: r.model,
+      mode: 'llm',
+      provider: 'groq',
+      latencyMs: Math.round(performance.now() - start),
+      usage: { inputTokens: r.inputTokens, outputTokens: r.outputTokens },
+    };
+  } catch (err) {
+    if (err instanceof GroqError) throw new LlmError(err.message, err.code);
+    throw new LlmError('The Groq call failed.', 'LLM_ERROR');
+  }
+}
+
+/** Errors where another provider may succeed (never refusals: a decline is not retried elsewhere). */
+const FALLBACK_ON = new Set(['LLM_AUTH', 'LLM_BILLING', 'LLM_RATE_LIMITED', 'LLM_TIMEOUT', 'LLM_ERROR']);
+
+/**
+ * Provider order: the preferred provider (LLM_PROVIDER) if its key is set, then the other one.
+ * Anthropic → Groq when Anthropic fails (no credit, bad key, rate limit, outage). No key at all →
+ * the labelled template answer.
+ */
 export async function groundedAnswer(query: string, memories: GroundingMemory[]): Promise<AnswerResult> {
-  if (!isLlmConfigured()) return templateAnswer(query, memories);
-  return anthropicAnswer(query, memories);
+  const chain: ('anthropic' | 'groq')[] = [];
+  const order: ('anthropic' | 'groq')[] = config.LLM_PROVIDER === 'groq' ? ['groq', 'anthropic'] : ['anthropic', 'groq'];
+  for (const p of order) if (p === 'anthropic' ? isAnthropicConfigured() : isGroqConfigured()) chain.push(p);
+  if (chain.length === 0) return templateAnswer(query, memories);
+
+  let firstError: LlmError | null = null;
+  for (const provider of chain) {
+    try {
+      const result = provider === 'anthropic' ? await anthropicAnswer(query, memories) : await groqAnswer(query, memories);
+      if (firstError) result.fallbackReason = `${chain[0] === 'anthropic' ? 'Anthropic' : 'Groq'} unavailable: ${firstError.message}`;
+      return result;
+    } catch (err) {
+      const e = err instanceof LlmError ? err : new LlmError('The LLM call failed.', 'LLM_ERROR');
+      if (!FALLBACK_ON.has(e.code)) throw e;
+      if (!firstError) firstError = e;
+      console.warn(`[llm] ${provider} failed (${e.code}): ${e.message}${provider !== chain[chain.length - 1] ? ' — trying the next provider' : ''}`);
+    }
+  }
+  throw firstError!;
 }
 
 registerProbe('llm', async () => {
-  const meta = { provider: config.LLM_PROVIDER, model: config.LLM_MODEL };
   if (!isLlmConfigured()) {
-    return { status: 'not_configured', detail: 'LLM_API_KEY is not set. Answers use the labelled template fallback.', latencyMs: null, meta };
+    return {
+      status: 'not_configured',
+      detail: 'Neither LLM_API_KEY (Anthropic) nor GROQ_API_KEY is set. Answers use the labelled template fallback.',
+      latencyMs: null,
+      meta: { provider: null, model: null },
+    };
   }
+  const groqFirst = !isAnthropicConfigured() || config.LLM_PROVIDER === 'groq';
+  if (groqFirst) {
+    const g = await probeGroq();
+    const meta = { provider: 'groq', model: config.GROQ_MODEL, fallback: isAnthropicConfigured() ? `anthropic · ${config.LLM_MODEL}` : null };
+    return g.ok
+      ? { status: 'connected', detail: `Groq reachable · ${g.model}${isAnthropicConfigured() ? ' · Anthropic as fallback' : ''}`, latencyMs: g.latencyMs, meta }
+      : { status: 'error', detail: g.detail, latencyMs: null, meta };
+  }
+  const meta = { provider: 'anthropic', model: config.LLM_MODEL, fallback: isGroqConfigured() ? `groq · ${config.GROQ_MODEL}` : null };
   const start = performance.now();
   try {
     // Token-free probe: confirms the key and that the configured model exists.
     const m = await anthropic().models.retrieve(config.LLM_MODEL, {}, { timeout: 10_000 });
-    return { status: 'connected', detail: `Anthropic reachable · ${m.id}`, latencyMs: Math.round(performance.now() - start), meta };
+    return {
+      status: 'connected',
+      detail: `Anthropic reachable · ${m.id}${isGroqConfigured() ? ' · Groq fallback configured' : ''}`,
+      latencyMs: Math.round(performance.now() - start),
+      meta,
+    };
   } catch (err) {
     const detail =
       err instanceof Anthropic.AuthenticationError
@@ -174,6 +254,11 @@ registerProbe('llm', async () => {
           : err instanceof Anthropic.APIError
             ? `Anthropic returned HTTP ${err.status ?? 'n/a'}.`
             : 'Could not reach Anthropic.';
+    // Anthropic is down but answers still work through Groq: report that honestly.
+    if (isGroqConfigured()) {
+      const g = await probeGroq();
+      if (g.ok) return { status: 'connected', detail: `Anthropic: ${detail} Answers use Groq · ${g.model}`, latencyMs: g.latencyMs, meta: { ...meta, provider: 'groq', model: g.model } };
+    }
     return { status: 'error', detail, latencyMs: null, meta };
   }
 });

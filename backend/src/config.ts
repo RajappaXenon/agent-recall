@@ -37,9 +37,15 @@ const EnvSchema = z.object({
   // https://api.voyageai.com/v1 for keys from voyageai.com; https://ai.mongodb.com/v1 for Atlas "model API keys".
   VOYAGE_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().default('https://api.voyageai.com/v1')),
 
-  LLM_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['anthropic']).default('anthropic')),
+  // Preferred provider when both keys are set. With one key, that provider is used; with none, template answers.
+  LLM_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['anthropic', 'groq']).default('anthropic')),
   LLM_API_KEY: optionalString,
   LLM_MODEL: z.preprocess(emptyToUndefined, z.string().default('claude-opus-5-5')),
+
+  // Groq (OpenAI-compatible): used when no Anthropic key is set, and as the fallback when an Anthropic call fails.
+  GROQ_API_KEY: optionalString,
+  GROQ_MODEL: z.preprocess(emptyToUndefined, z.string().default('llama-3.3-70b-versatile')),
+  GROQ_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().default('https://api.groq.com/openai/v1')),
 
   ELEVENLABS_API_KEY: optionalString,
   ELEVENLABS_VOICE_ID: optionalString,
@@ -72,7 +78,7 @@ export function redactUri(uri: string): string {
 /** Removes any occurrence of secrets from a message before it reaches logs or clients. */
 export function scrubSecrets(message: string): string {
   let out = message;
-  for (const secret of [config.MONGODB_URI, config.VOYAGE_API_KEY, config.LLM_API_KEY, config.ELEVENLABS_API_KEY]) {
+  for (const secret of [config.MONGODB_URI, config.VOYAGE_API_KEY, config.LLM_API_KEY, config.GROQ_API_KEY, config.ELEVENLABS_API_KEY]) {
     if (secret) out = out.split(secret).join('[redacted]');
   }
   return out.replace(/mongodb(\+srv)?:\/\/[^\s'"]+/g, (m) => redactUri(m));
