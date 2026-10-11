@@ -1,0 +1,39 @@
+{
+  "voice": "ElevenLabs (ELEVENLABS_VOICE_ID from .env), model eleven_multilingual_v2",
+  "query": "Orders API keeps hitting 504s after we shrank the database driver pool. How did we fix it before?",
+  "note": "Every claim below is shown on screen in the same scene and was verified against the running app before recording.",
+  "segments": [
+    {
+      "id": "s1-incident",
+      "scene": "Memory Explorer: open the stored past incident",
+      "text": "Agent Recall gives AI agents a memory. Here's a past incident it already knows: checkout timeouts after a connection pool change."
+    },
+    {
+      "id": "s2-search",
+      "scene": "Search Playground: type a differently worded problem, Run all",
+      "text": "Now a new problem, worded differently. One click runs keyword search, semantic search, and a hybrid of both, so the old incident surfaces even without matching words.",
+      "alignSecondSentenceTo": "run-all"
+    },
+    {
+      "id": "s3-answer",
+      "scene": "Select memories, Use in agent task, grounded answer with citations",
+      "text": "Pick the most relevant memories, and the agent drafts a recommendation grounded in them, with citations back to the evidence."
+    },
+    {
+      "id": "s4-outcome",
+      "scene": "Did this work? Worked + Helpful, Record outcome, new memory becomes Searchable",
+      "text": "The fix worked, so we record the outcome. It becomes a new verified memory, searchable within seconds."
+    },
+    {
+      "id": "s5-reload",
+      "scene": "Memory Explorer after a full page reload: the new memory persists",
+      "text": "After a full page reload, the new memory is still there, stored in MongoDB Atlas and ready for the next incident.",
+      "alignTo": "reload"
+    },
+    {
+      "id": "outro",
+      "scene": "Closing branding card",
+      "text": "Agent Recall. Give AI agents a memory worth remembering."
+    }
+  ]
+}

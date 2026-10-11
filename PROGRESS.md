@@ -433,3 +433,22 @@ screenshots         → 46 captured, no "did not appear" warnings (React Router 
 - Fixed: probe URL-encoded the `/` in the model id (false "not found"); gpt-oss cites as `【mem:id】` → citations normalised to `[mem:id]` for every provider (unit test); answer panel renders `**bold**` and `` `code` `` safely.
 - Live: probe `connected — Groq reachable · openai/gpt-oss-120b (179 ms)`; `/api/answers` provider=groq, ~1.2 s, 2/3 memories cited; `demo:e2e` all steps with the Groq answer; UI header "Groq · openai/gpt-oss-120b", citation chips working.
 - Full suite: backend 46/46, frontend 2/2; typecheck, lint, build pass. Demo data reset.
+
+## Demo video (2026-10-11)
+
+- `demo-video/agent-recall-demo.mp4` is a 60 s tutorial recorded with Playwright against the running app and the live Atlas cluster. The scripts, narration, captions, recording and timeline are in `demo-video/`; see `demo-video/README.md`.
+- Flow:
+  1. Open the past incident.
+  2. Run a differently worded query through keyword, semantic and hybrid search.
+  3. Generate a grounded answer with citations (Groq).
+  4. Record the outcome: Worked, which creates a new memory that becomes Searchable.
+  5. Reload the page: the memory is still listed, and its Provenance tab shows where it came from.
+- Narration: ElevenLabs `eleven_multilingual_v2`. Clips are aligned to scene starts and to recorder markers (Run all click, page reload). Captions are burned in. The background music is a synthesized pad ducked under the voice.
+- Verified (ffprobe/ffmpeg 6.1.1):
+  - video h264 1920×1080 30/1, 1800 frames, 60.000000 s;
+  - audio aac 48 kHz stereo, 60.000000 s; container 60.000000 s;
+  - full decode: 0 errors;
+  - integrated loudness −16.1 LUFS; title (music only) mean −33.6 dB vs narration −19.0 dB;
+  - console errors during recording: 0.
+- FFmpeg came from the `ffmpeg-static` and `ffprobe-static` npm packages, installed outside the repo. Demo data was reset after recording.
+- Not changed (no app changes for the video): an outcome-created memory shows raw `**` Markdown in its Content tab.

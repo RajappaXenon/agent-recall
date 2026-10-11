@@ -1,0 +1,35 @@
+{
+  "engine": "elevenlabs:eleven_multilingual_v2",
+  "durations": {
+    "s1-incident": {
+      "file": "narration\\s1-incident.mp3",
+      "seconds": 8.673,
+      "words": 21
+    },
+    "s2-search": {
+      "file": "narration\\s2-search.mp3",
+      "seconds": 11.128,
+      "words": 27
+    },
+    "s3-answer": {
+      "file": "narration\\s3-answer.mp3",
+      "seconds": 7.34,
+      "words": 20
+    },
+    "s4-outcome": {
+      "file": "narration\\s4-outcome.mp3",
+      "seconds": 6.949,
+      "words": 17
+    },
+    "s5-reload": {
+      "file": "narration\\s5-reload.mp3",
+      "seconds": 7.523,
+      "words": 21
+    },
+    "outro": {
+      "file": "narration\\outro.mp3",
+      "seconds": 3.997,
+      "words": 9
+    }
+  }
+}

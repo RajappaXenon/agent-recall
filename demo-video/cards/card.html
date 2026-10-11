@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent Recall card</title>
+    <style>
+      @font-face {
+        font-family: 'Geist';
+        src: url('../../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2') format('woff2');
+        font-weight: 100 900;
+      }
+      :root {
+        --bg: #0b0d12;
+        --surface: #151923;
+        --border: #232a3a;
+        --text: #e8eaf0;
+        --muted: #9aa3b5;
+        --accent: #8b7cff;
+        --accent-2: #43d9c3;
+        --keyword: #6ba8ff;
+      }
+      * { margin: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; background: var(--bg); color: var(--text); font-family: Geist, sans-serif; overflow: hidden; }
+      .wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; }
+      .brand { display: flex; align-items: center; gap: 28px; }
+      .name { font-size: 112px; font-weight: 600; letter-spacing: -0.03em; }
+      .tag { font-size: 40px; color: var(--muted); font-weight: 400; }
+      .sub { margin-top: 28px; font-size: 26px; color: var(--muted); display: flex; gap: 20px; align-items: center; }
+      .dot { width: 6px; height: 6px; border-radius: 3px; background: var(--border); }
+      .modes { display: flex; gap: 18px; margin-top: 8px; }
+      .pill { font-size: 24px; padding: 8px 18px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+      .k { color: var(--keyword); } .s { color: var(--accent-2); } .h { color: var(--accent); }
+      .rule { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--keyword), var(--accent), var(--accent-2)); opacity: .55; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brand">
+        <svg width="120" height="120" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 4 28 16 16 28 4 16Z" fill="none" stroke="#8b7cff" stroke-width="2.2" stroke-linejoin="round" />
+          <circle cx="16" cy="16" r="3.5" fill="#43d9c3" />
+        </svg>
+        <div class="name">Agent Recall</div>
+      </div>
+      <div class="tag">Give AI agents a memory worth remembering.</div>
+      <div id="extra"></div>
+    </div>
+    <div class="rule"></div>
+    <script>
+      const kind = new URLSearchParams(location.search).get('kind');
+      const extra = document.getElementById('extra');
+      if (kind === 'title') {
+        extra.innerHTML = '<div class="modes"><span class="pill k">Keyword</span><span class="pill s">Semantic</span><span class="pill h">Hybrid</span></div>' +
+          '<div class="sub" style="justify-content:center">A 60-second tour</div>';
+      } else {
+        extra.innerHTML = '<div class="sub"><span>MongoDB Atlas Search &amp; Vector Search</span><span class="dot"></span><span>Voyage AI</span><span class="dot"></span><span>Groq</span><span class="dot"></span><span>ElevenLabs</span></div>';
+      }
+    </script>
+  </body>
+</html>

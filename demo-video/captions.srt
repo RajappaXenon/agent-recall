@@ -1,0 +1,50 @@
+1
+00:00:04,400 --> 00:00:06,995
+Agent Recall gives AI agents a memory.
+
+2
+00:00:06,995 --> 00:00:09,727
+Here's a past incident it already knows:
+
+3
+00:00:09,727 --> 00:00:13,073
+checkout timeouts after a connection pool change.
+
+4
+00:00:14,400 --> 00:00:16,680
+Now a new problem, worded differently.
+
+5
+00:00:17,504 --> 00:00:22,349
+One click runs keyword search,
+semantic search, and a hybrid of both,
+
+6
+00:00:22,349 --> 00:00:26,352
+so the old incident surfaces even without matching words.
+
+7
+00:00:26,900 --> 00:00:32,109
+Pick the most relevant memories, and the
+agent drafts a recommendation grounded in them,
+
+8
+00:00:32,109 --> 00:00:34,240
+with citations back to the evidence.
+
+9
+00:00:37,400 --> 00:00:40,221
+The fix worked, so we record the outcome.
+
+10
+00:00:40,221 --> 00:00:44,349
+It becomes a new verified
+memory, searchable within seconds.
+
+11
+00:00:46,444 --> 00:00:50,206
+After a full page reload, the new memory is still there,
+
+12
+00:00:50,206 --> 00:00:53,967
+stored in MongoDB Atlas and ready for the next incident.
