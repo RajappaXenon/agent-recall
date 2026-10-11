@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { AgentWithStatsSchema, CreateAgentSchema, IdSchema, MemorySchema, UpdateAgentSchema, paginated } from '@agent-recall/shared';
+import { AgentWithStatsSchema, CreateAgentSchema, IdSchema, MemorySchema, OutcomeListItemSchema, TaskSchema, UpdateAgentSchema, paginated } from '@agent-recall/shared';
+import { listOutcomes, listTasks } from '../services/tasks.js';
 import { createAgent, getAgent, listAgents, updateAgent } from '../services/agents.js';
 import { listMemories } from '../services/memories.js';
 import { userActor } from '../services/events.js';
@@ -49,6 +50,31 @@ const agentRoutes: FastifyPluginAsyncZod = async (app) => {
         includeArchived: false,
       });
       return { items: items.map(toMemory), total, page: req.query.page, pageSize: req.query.pageSize };
+    },
+  );
+
+  app.get(
+    '/agents/:id/tasks',
+    {
+      schema: {
+        tags: ['agents'],
+        params: Params,
+        querystring: z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }),
+        response: { 200: paginated(TaskSchema) },
+      },
+    },
+    async (req) => {
+      await getAgent(req.auth.orgId, req.params.id);
+      return listTasks(req.auth.orgId, { ...req.query, agentId: req.params.id });
+    },
+  );
+
+  app.get(
+    '/agents/:id/outcomes',
+    { schema: { tags: ['agents'], params: Params, response: { 200: z.object({ items: z.array(OutcomeListItemSchema) }) } } },
+    async (req) => {
+      await getAgent(req.auth.orgId, req.params.id);
+      return { items: await listOutcomes(req.auth.orgId, { agentId: req.params.id }) };
     },
   );
 };

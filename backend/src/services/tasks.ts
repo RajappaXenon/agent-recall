@@ -1,5 +1,5 @@
 import type { Filter, ObjectId } from 'mongodb';
-import type { Checkpoint, Task } from '@agent-recall/shared';
+import type { Checkpoint, OutcomeListItem, Task } from '@agent-recall/shared';
 import type { OutcomeDoc, TaskDoc } from '../db/collections.js';
 import { checkpointsRepo, outcomesRepo, tasksRepo, toObjectId } from '../db/repositories/index.js';
 import { notFound } from '../lib/errors.js';
@@ -76,5 +76,25 @@ export async function listCheckpoints(orgId: ObjectId, taskId: string): Promise<
     workerId: c.workerId,
     attempt: c.attempt,
     createdAt: c.createdAt.toISOString(),
+  }));
+}
+
+export async function listOutcomes(orgId: ObjectId, q: { agentId?: string; limit?: number }): Promise<OutcomeListItem[]> {
+  const filter: Filter<OutcomeDoc> = q.agentId ? { agentId: toObjectId(q.agentId, 'Agent') } : {};
+  const outcomes = await outcomesRepo.find(orgId, filter, { sort: { createdAt: -1 }, limit: q.limit ?? 50 });
+  const tasks = await tasksRepo.findByIds(orgId, outcomes.map((o) => o.taskId));
+  const goal = new Map(tasks.map((t) => [String(t._id), t.goal]));
+  return outcomes.map((o) => ({
+    id: String(o._id),
+    taskId: String(o.taskId),
+    agentId: String(o.agentId),
+    question: goal.get(String(o.taskId)) ?? '',
+    result: o.result,
+    feedback: o.feedback,
+    notes: o.notes,
+    citedMemoryIds: o.citedMemoryIds.map(String),
+    createdMemoryId: o.createdMemoryId ? String(o.createdMemoryId) : null,
+    isSeed: o.isSeed,
+    createdAt: o.createdAt.toISOString(),
   }));
 }

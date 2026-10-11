@@ -33,6 +33,8 @@ export interface SearchOptions {
   applyOutcomePolicy: boolean;
   /** DEMO_MODE only: force the keyword index to be treated as unavailable (labelled in warnings). */
   forceKeywordFallback?: boolean;
+  /** Worker steps: makes the retrieval log / retrievalCount side effects idempotent. */
+  idempotencyKey?: string;
   /** Tests only: query a different index name to exercise the missing-index path without touching real indexes. */
   indexNames?: { search?: string; vector?: string };
 }
@@ -398,7 +400,17 @@ export async function search(orgId: ObjectId, mode: SearchMode, o: SearchOptions
     res = await hybrid(orgId, o);
   }
 
+  // A worker step that reruns after a crash passes its idempotency key: reuse the earlier log, don't count twice.
+  if (o.idempotencyKey) {
+    const prior = (await retrievalLogsRepo.find(orgId, { idempotencyKey: o.idempotencyKey }, { limit: 1 }))[0];
+    if (prior) {
+      res.logId = prior._id.toHexString();
+      return res;
+    }
+  }
+
   const log = await retrievalLogsRepo.insertOne(orgId, {
+    ...(o.idempotencyKey ? { idempotencyKey: o.idempotencyKey } : {}),
     query: o.query,
     mode,
     engine: res.engine,

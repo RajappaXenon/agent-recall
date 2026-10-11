@@ -3,6 +3,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import {
   AnswerRequestSchema,
   AnswerResponseSchema,
+  CreatePlaybookSchema,
   CheckpointSchema,
   IdSchema,
   OutcomeRequestSchema,
@@ -14,6 +15,7 @@ import {
 import { createAnswer } from '../services/answers.js';
 import { recordOutcome } from '../services/outcomes.js';
 import { getTask, listCheckpoints, listTasks } from '../services/tasks.js';
+import { createPlaybookTask } from '../services/playbook.js';
 import { userActor } from '../services/events.js';
 
 const Params = z.object({ id: IdSchema });
@@ -33,6 +35,18 @@ const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (req) => createAnswer(req.auth.orgId, req.body, userActor(req.auth.userId)),
+  );
+
+  app.post(
+    '/tasks',
+    {
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+      schema: { tags: ['tasks'], summary: 'Queue the demo playbook for the worker', body: CreatePlaybookSchema, response: { 201: TaskSchema } },
+    },
+    async (req, reply) => {
+      const t = await createPlaybookTask(req.auth.orgId, req.body, userActor(req.auth.userId));
+      return reply.status(201).send(await getTask(req.auth.orgId, t._id.toHexString()));
+    },
   );
 
   app.get('/tasks', { schema: { tags: ['tasks'], querystring: TaskListQuerySchema, response: { 200: paginated(TaskSchema) } } }, async (req) =>

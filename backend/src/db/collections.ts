@@ -120,6 +120,7 @@ export interface RetrievalLogDoc extends BaseDoc {
   filters: Record<string, unknown>;
   warnings: string[];
   userId: ObjectId | null;
+  idempotencyKey?: string;
 }
 
 export interface EventDoc extends BaseDoc {

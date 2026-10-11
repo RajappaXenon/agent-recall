@@ -175,3 +175,37 @@ npm run demo:e2e -w backend (×2), npm run demo:reset -w backend (×3)
 npm test, npm run typecheck, npm run lint
 node frontend/scripts/screenshots.mjs --only=search-a / --only=search-outcome
 ```
+
+## Phase 4 — Recovery (2026-10-11)
+
+### Done
+- `backend/src/worker.ts` (separate process): claims playbook tasks with `findOneAndUpdate` (status queued/running, lease empty or expired → `running`, `workerId`, `leaseExpiresAt = now + LEASE_MS`, `$inc attempt`), heartbeats the lease every `LEASE_MS/3` only while `workerId` matches, resumes at `max(stepIndex)+1` from checkpoints, logs `task.resumed` when `attempt > 1`.
+- Per step: execution record → deterministic step → transaction { insert checkpoint (`idempotencyKey = taskId:stepIndex`, unique) ; `updateOne({_id, workerId, currentStep: i}, {currentStep: i+1})` }; no match / duplicate key ⇒ lease lost ⇒ stop. Step 1's hybrid search is keyed by the same idempotency key (retrieval log + retrievalCount not duplicated on rerun; unique partial index `retrieval_idempotency`).
+- Playbook "Diagnose connection-pool incident": collect symptoms → retrieve similar incidents (hybrid) → match the verified procedure → draft remediation → summarize.
+- SIGTERM/SIGINT: finish the current step, release the lease, exit 0. DEMO_MODE crash: `POST /api/dev/worker/crash` writes a request in `worker_control`; the worker checks between steps and calls `process.exit(1)` without releasing its lease.
+- Cross-tenant claim isolated in `db/repositories/worker.ts`; everything after a claim uses the task's own `orgId`. General workers never claim tasks from `__test__*` orgs (tests run org-scoped workers via `WORKER_ORG_ID`).
+- `npm run worker:supervised -w backend`: restarts a crashed worker as a new process (new worker id), like systemd/k8s — used for the live demo.
+- API: `POST /api/tasks` (queue playbook), `GET /api/tasks/:id/checkpoints`, `GET /api/dev/status` (demo flag + live worker heartbeats), `GET /api/events` (filters, pagination), `GET /api/agents/:id/tasks|outcomes`.
+- UI: Task detail (status, progress, attempts, worker + liveness, live lease countdown, step timeline with checkpoint time/worker/attempt and real step output, "Worker crashed — resumed from step N by worker-x" marker, orphaned-task marker while waiting for the lease, Crash worker button in DEMO_MODE, Run again, output, task events). Agents page (list with stats, Run playbook, Tasks / Memories / Outcomes tabs, create agent). Shared `EventRow`.
+
+### Gate
+- `backend/test/recovery.e2e.test.ts` against Atlas: spawns the real worker (`node --import tsx src/worker.ts`, step delay 1.5 s, lease 4 s), waits for 2 checkpoints, SIGKILLs it, asserts the task is still `running` with exactly 2 checkpoints and the dead worker's lease, spawns a second worker, waits for completion, asserts checkpoints `[0,1,2,3,4]` with unique idempotency keys (0–1 by worker A, 2–4 by worker B), steps 0 and 1 executed exactly once (from `step_executions`), attempt 2, and the resume log line. Result: `✓ … 12958ms · Tests 1 passed (1)`; re-run with the demo worker running concurrently: `✓ 12709ms`, demo worker claimed 0 test tasks.
+- Live demo through the API (dev server + supervised worker, lease 15 s, step delay 4 s): crash requested during step 3 → `worker-34af … crash requested: exiting with code 1 after step 3 (lease not released)` → supervisor restart → `worker-55ff resuming task … at step 4 (attempt 2; 3 checkpoint(s) restored)` → completed; checkpoints `0:worker-34af@1 1:worker-34af@1 2:worker-34af@1 3:worker-55ff@2 4:worker-55ff@2`.
+- Full suite: backend `Test Files 6 passed (6) · Tests 34 passed (34)`, frontend 2/2; typecheck, lint, build pass.
+
+### Screenshot review (task detail, agents)
+1. Resume marker timestamp showed step 4's checkpoint time → now the `task.resumed` event time.
+2. Marker title enlarged (17 px semibold, warning colour, body in primary text) for across-the-room legibility; icon kept on the timeline axis.
+3. Step 5 summary cut mid-word → word-boundary ellipsis.
+4. Timeline panel stretched to the output column height → `self-start`.
+5. "1 tasks" → singular/plural.
+
+### Housekeeping
+- A `files.zip` (copies of DESIGN/CLAUDE/SPEC docs, no secrets) had been swept into a commit by `git add -A`; removed from tracking, `*.zip` ignored. No remote exists.
+
+### Commands run
+```
+npx vitest run test/recovery.e2e.test.ts (×2), npm test, npm run typecheck, npm run lint, npm run build
+npm run worker:supervised -w backend; curl POST /api/tasks, POST /api/dev/worker/crash, GET /api/tasks/:id(/checkpoints)
+node frontend/scripts/screenshots.mjs --only=task-resumed (×2), --only=agents
+```

@@ -43,10 +43,10 @@ export function Timeline({ items, className }: { items: TimelineItem[]; classNam
             )}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <div className={cn('text-dense font-medium text-text', item.marker && 'text-body font-semibold')}>{item.title}</div>
+              <div className={cn('text-dense font-medium text-text', item.marker && 'text-[17px] font-semibold leading-6 text-warning')}>{item.title}</div>
               {item.meta && <div className="tabular text-caption font-normal text-text-muted">{item.meta}</div>}
             </div>
-            {item.body && <div className="mt-1 text-dense text-text-muted">{item.body}</div>}
+            {item.body && <div className={cn('mt-1 text-dense text-text-muted', item.marker && 'text-body text-text')}>{item.body}</div>}
           </div>
         </li>
       ))}

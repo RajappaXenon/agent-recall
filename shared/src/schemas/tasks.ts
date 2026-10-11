@@ -93,3 +93,32 @@ export const CheckpointSchema = z.object({
   createdAt: IsoDateSchema,
 });
 export type Checkpoint = z.infer<typeof CheckpointSchema>;
+
+export const CreatePlaybookSchema = z.object({
+  agentId: IdSchema,
+  symptoms: z.string().trim().max(2000).optional(),
+});
+export type CreatePlaybookInput = z.infer<typeof CreatePlaybookSchema>;
+
+export const DevStatusSchema = z.object({
+  demoMode: z.boolean(),
+  leaseMs: z.number().int(),
+  stepDelayMs: z.number().int(),
+  workers: z.array(z.object({ workerId: z.string(), pid: z.number().nullable(), currentTaskId: IdSchema.nullable(), lastSeen: IsoDateSchema })),
+});
+export type DevStatus = z.infer<typeof DevStatusSchema>;
+
+export const OutcomeListItemSchema = z.object({
+  id: IdSchema,
+  taskId: IdSchema,
+  agentId: IdSchema,
+  question: z.string(),
+  result: z.enum(['worked', 'failed']),
+  feedback: z.enum(['helpful', 'not_helpful']).nullable(),
+  notes: z.string(),
+  citedMemoryIds: z.array(IdSchema),
+  createdMemoryId: IdSchema.nullable(),
+  isSeed: z.boolean(),
+  createdAt: IsoDateSchema,
+});
+export type OutcomeListItem = z.infer<typeof OutcomeListItemSchema>;

@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
-import { Activity, Bot, LayoutDashboard, Settings, TrendingUp } from 'lucide-react';
+import { Activity, LayoutDashboard, Settings, TrendingUp } from 'lucide-react';
 import { AppShell } from './AppShell';
 import { Placeholder } from '@/pages/Placeholder';
 import NotFound from '@/pages/NotFound';
@@ -10,6 +10,8 @@ import { Cmd } from '@/components/ui/states';
 const DevUi = lazy(() => import('@/pages/DevUi'));
 const MemoryExplorer = lazy(() => import('@/pages/MemoryExplorer'));
 const SearchPlayground = lazy(() => import('@/pages/SearchPlayground'));
+const Agents = lazy(() => import('@/pages/Agents'));
+const TaskDetail = lazy(() => import('@/pages/TaskDetail'));
 
 const page = (node: ReactNode) => <Suspense fallback={<Skeleton className="h-96 w-full" />}>{node}</Suspense>;
 
@@ -30,10 +32,8 @@ export const router = createBrowserRouter([
       },
       { path: '/memories', element: page(<MemoryExplorer />) },
       { path: '/search', element: page(<SearchPlayground />) },
-      {
-        path: '/agents',
-        element: <Placeholder title="Agents" description="Agents own memories and run tasks." icon={Bot} message="No agents yet. Load the demo data to add three." />,
-      },
+      { path: '/agents', element: page(<Agents />) },
+      { path: '/tasks/:id', element: page(<TaskDetail />), handle: { crumb: 'Task' } },
       {
         path: '/learning',
         element: (

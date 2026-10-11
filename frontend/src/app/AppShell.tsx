@@ -28,7 +28,7 @@ function Breadcrumb() {
   const location = useLocation();
   const matches = useMatches();
   const section =
-    location.pathname === '/' ? ALL_NAV[0]! : ALL_NAV.filter((n) => n.to !== '/').find((n) => location.pathname.startsWith(n.to));
+    location.pathname === '/' ? ALL_NAV[0]! : ALL_NAV.filter((n) => n.to !== '/').find((n) => location.pathname.startsWith(n.to) || (n.to === '/agents' && location.pathname.startsWith('/tasks')));
   const leaf = [...matches]
     .reverse()
     .map((m) => {
