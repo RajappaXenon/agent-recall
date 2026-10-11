@@ -3,18 +3,20 @@ import { cn } from '@/lib/utils';
 import { tokenColor } from '@/lib/tokens';
 
 function Sparkline({ data, token }: { data: number[]; token: string }) {
-  if (data.length < 2) return null;
+  // A flat or missing series carries no information: show nothing rather than a decorative line.
+  if (data.length < 2 || data.every((v) => v === data[0])) return null;
   const w = 96;
   const h = 28;
   const max = Math.max(...data);
-  const min = Math.min(...data);
+  // Zero baseline: small changes in a large count stay small instead of filling the tile.
+  const min = Math.min(0, ...data);
   const range = max - min || 1;
   const points = data.map((v, i) => [(i / (data.length - 1)) * w, h - 2 - ((v - min) / range) * (h - 4)] as const);
   const d = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   const area = `${d} L${w},${h} L0,${h} Z`;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden className="shrink-0">
-      <path d={area} fill={tokenColor(token, 0.12)} />
+      <path d={area} fill={tokenColor(token, 0.06)} />
       <path d={d} fill="none" stroke={tokenColor(token)} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );

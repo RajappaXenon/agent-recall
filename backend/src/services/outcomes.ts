@@ -109,7 +109,10 @@ export async function recordOutcome(
   const title = clip(`${worked ? 'Resolved' : 'Attempted, failed'}: ${problem}`, 160);
   const content = [
     `Question: ${task.goal}`,
-    `Recommendation applied: ${clip(stripCitations(answer.replace(/^Template answer \(LLM not configured\)\.[^\n]*\n/, '')), 900)}`,
+    // Template answers are extracts of other memories: record what was followed instead of nesting their text.
+    answer.startsWith('Template answer')
+      ? `Recommendation applied: followed ${citedDocs.map((d) => `"${d.title}"`).join(', ') || 'the cited memories'}.`
+      : `Recommendation applied: ${clip(stripCitations(answer), 900)}`,
     `Result: ${worked ? 'worked' : 'did not work'}${req.feedback ? ` (${req.feedback === 'helpful' ? 'helpful' : 'not helpful'})` : ''}.`,
     req.notes ? `Notes: ${req.notes}` : null,
     citedDocs.length ? `Based on: ${citedDocs.map((d) => d.title).join('; ')}.` : null,

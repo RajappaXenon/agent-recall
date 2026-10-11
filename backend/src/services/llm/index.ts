@@ -127,7 +127,12 @@ export function templateAnswer(query: string, memories: GroundingMemory[]): Answ
   const order = { verified_success: 0, unverified: 1, verified_failure: 2 } as Record<string, number>;
   const sorted = [...memories].sort((a, b) => (order[a.verification] ?? 1) - (order[b.verification] ?? 1));
   const lines = sorted.map((m) => {
-    const firstPart = m.content.split(/\n|(?<=\.)\s/).filter(Boolean).slice(0, 2).join(' ');
+    // Outcome memories start with the question; quote what was applied instead.
+    const body = m.content
+      .split('\n')
+      .filter((l) => l.trim() && !l.startsWith('Question:'))
+      .join(' ');
+    const firstPart = body.split(/(?<=\.)\s/).filter(Boolean).slice(0, 2).join(' ');
     const tag = m.verification === 'verified_success' ? ' (verified)' : m.verification === 'verified_failure' ? ' (verified failure — avoid)' : '';
     return `- ${m.title}${tag}: ${firstPart} [mem:${m.id}]`;
   });

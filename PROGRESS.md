@@ -209,3 +209,31 @@ npx vitest run test/recovery.e2e.test.ts (×2), npm test, npm run typecheck, npm
 npm run worker:supervised -w backend; curl POST /api/tasks, POST /api/dev/worker/crash, GET /api/tasks/:id(/checkpoints)
 node frontend/scripts/screenshots.mjs --only=task-resumed (×2), --only=agents
 ```
+
+## Phase 5 — Dashboards (2026-10-11)
+
+### Done
+- `GET /api/overview`: total memories (seed/live split), indexed (embedding ready ÷ total), successful outcomes (worked ÷ recorded), retrieval success rate (worked ÷ outcomes recorded, `null` → "—" when none), 14-day cumulative sparklines, 30-day activity (memories created per day; memories returned by searches per day, from `retrieval_logs`), type distribution, recent episodic experiences, recent searches. Every metric carries `source: seed | live | mixed | none` → "Demo data" / "Demo + live" badges.
+- `GET /api/learning`: outcomes per ISO week (12 weeks), totals, most useful (helpful feedback, Laplace score), most retrieved, verified procedures with their outcome evidence, recurring problems (episodic tags minus record-type tags, with resolved counts), feedback history.
+- Pages: Overview "Memory Intelligence", Learning & Insights, Activity Log (grouped by day, type/status filters, links to task/memory, pagination, live refresh), Settings & Integrations (live probes + Refresh, per-integration detail/meta, setup steps when not connected, audio section, workspace/demo/worker facts). Agents page from Phase 4. Explorer: `tag` URL filter, unknown-agent filter label.
+- Charts (dataviz skill followed): palettes run through `validate_palette.js` on the dark surface. Results: the DESIGN.md hexes sit above the dark lightness band (kept: DESIGN.md is binding); semantic violet vs taxonomic blue are ΔE 2.5 (deutan) and no ordering of the four type colours passes, so type identity is never colour-only (icon + label + value on every bar); created vs retrieved have very different scales → two single-series charts on a shared axis, not two colours on one; worked/failed status colours are ΔE 7.0 deutan → legend, 2 px gaps and a hatch texture on "failed". Every chart has hover tooltips and a Table view.
+
+### Gate
+- All pages render real data from Atlas with skeleton / empty / error states (verified in screenshots, incl. explorer empty state and not-found).
+- Screenshot review at 1440 / 1024 / 390 (46 shots). Round 1 → fixes:
+  1. Recent-searches query column squeezed to ~20 chars while numeric columns wasted space → fixed-layout table, widths on headers, engine/latency/results hidden on narrow screens.
+  2. Sparklines min–max scaled made 26 → 27 look like a cliff → zero baseline, flat series hidden, lighter fill.
+  3. Chart/table toggles took their own row above each chart → moved into panel headers.
+  4. Retrieved-per-day y-axis labels clipped on mobile ("20"/"60" for 120/60) → no negative margin, explicit axis width.
+  5. "By type" panel had empty space under the chart → taller chart, thicker bars.
+  6. Outcome memories created from template answers nested the previous memory's text ("Recommendation applied: - Resolved: … Question: …") → template outcomes record which memories were followed; template answers skip "Question:" lines.
+  7. "1 times", "1 tasks" → singular forms.
+  Round 2 re-shot overview/learning at all widths: resolved.
+- `npm test`: backend 34/34, frontend 2/2; typecheck, lint, build pass. `demo:reset` afterwards (removed the screenshot/e2e outcome memories and tasks).
+
+### Commands run
+```
+npm run demo:e2e -w backend; node frontend/scripts/screenshots.mjs (full), --only=overview, --only=learning
+node <dataviz>/scripts/validate_palette.js … --mode dark --surface "#151923"  (4 runs)
+npm test, npm run typecheck, npm run lint, npm run build, npm run demo:reset -w backend
+```

@@ -115,7 +115,7 @@ export function MemoryDrawer({ memoryId, onOpenChange }: { memoryId: string | nu
                   </span>
                 </Row>
                 <Row label="Retrieved">
-                  <span className="tabular">{m.retrievalCount} times</span>
+                  <span className="tabular">{m.retrievalCount} {m.retrievalCount === 1 ? 'time' : 'times'}</span>
                 </Row>
                 <Row label="Updated">{formatDateTime(m.updatedAt)}</Row>
               </dl>

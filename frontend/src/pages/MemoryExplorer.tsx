@@ -31,6 +31,7 @@ export default function MemoryExplorer() {
     agentId: get('agentId'),
     type: get('type'),
     verification: get('verification'),
+    tag: get('tag'),
     sort: get('sort') ?? 'newest',
   };
   const openId = get('open') ?? null;
@@ -48,7 +49,7 @@ export default function MemoryExplorer() {
 
   const list = useMemories({ page, pageSize: PAGE_SIZE, ...filters });
   const agentName = (id: string) => agents.data?.find((a) => a.id === id)?.name ?? '—';
-  const activeFilters = Boolean(filters.agentId || filters.type || filters.verification);
+  const activeFilters = Boolean(filters.agentId || filters.type || filters.verification || filters.tag);
 
   const columns: Column<Memory>[] = [
     {
@@ -116,7 +117,7 @@ export default function MemoryExplorer() {
               icon={Library}
               message="No memories match these filters."
               action={
-                <Button size="sm" onClick={() => set({ agentId: undefined, type: undefined, verification: undefined })}>
+                <Button size="sm" onClick={() => set({ agentId: undefined, type: undefined, verification: undefined, tag: undefined })}>
                   <X aria-hidden />
                   Clear filters
                 </Button>
@@ -188,7 +189,11 @@ function FilterBar({
         className="w-44"
         value={filters.agentId ?? ALL}
         onValueChange={(v) => set({ agentId: v })}
-        options={[{ value: ALL, label: 'All agents' }, ...agents.map((a) => ({ value: a.id, label: a.name }))]}
+        options={[
+          { value: ALL, label: 'All agents' },
+          ...agents.map((a) => ({ value: a.id, label: a.name })),
+          ...(filters.agentId && agents.length && !agents.some((a) => a.id === filters.agentId) ? [{ value: filters.agentId, label: 'Unknown agent' }] : []),
+        ]}
       />
       <Select
         size="sm"

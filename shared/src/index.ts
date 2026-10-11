@@ -7,3 +7,4 @@ export * from './schemas/integrations.js';
 export * from './schemas/search.js';
 export * from './schemas/tasks.js';
 export * from './schemas/events.js';
+export * from './schemas/insights.js';
