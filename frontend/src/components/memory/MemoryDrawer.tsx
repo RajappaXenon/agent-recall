@@ -14,6 +14,7 @@ import { ErrorState } from '@/components/ui/states';
 import { StatusDot } from '@/components/ui/status-dot';
 import { toast } from '@/components/ui/toast';
 import { MemoryFormDialog } from './MemoryForm';
+import { ListenButton } from '@/components/audio/ListenButton';
 import { RelatedTab, RetrievalsTab } from './MemoryDrawerTabs';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -101,6 +102,7 @@ export function MemoryDrawer({ memoryId, onOpenChange }: { memoryId: string | nu
             </TabsList>
             <TabsContent value="content">
               <p className="max-w-prose whitespace-pre-wrap text-body text-text">{m.content}</p>
+              <ListenButton text={`${m.title}. ${m.content}`} filename="agent-recall-memory.mp3" className="mt-3" />
               {m.tags.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {m.tags.map((t) => (

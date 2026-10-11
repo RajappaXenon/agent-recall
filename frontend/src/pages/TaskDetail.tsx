@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Cmd, EmptyState, ErrorState } from '@/components/ui/states';
 import { toast } from '@/components/ui/toast';
 import { EventRow } from '@/components/activity/EventRow';
+import { ListenButton } from '@/components/audio/ListenButton';
 
 const STATUS_TONE: Record<Task['status'], StatusTone> = { queued: 'neutral', running: 'accent', completed: 'success', failed: 'danger' };
 const STATUS_LABEL: Record<Task['status'], string> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed' };
@@ -243,6 +244,7 @@ export default function TaskDetail() {
             {output?.summary ? (
               <div className="flex flex-col gap-3 text-dense">
                 <p className="text-body text-text">{output.summary}</p>
+                <ListenButton text={output.summary} filename="agent-recall-task-summary.mp3" />
                 {output.procedure && (
                   <p className="text-text-muted">
                     Procedure:{' '}
@@ -254,7 +256,10 @@ export default function TaskDetail() {
                 {output.remediation && <pre className="whitespace-pre-wrap rounded-control bg-bg p-3 font-sans text-dense text-text-muted">{output.remediation}</pre>}
               </div>
             ) : t.kind === 'qa' && t.output ? (
-              <p className="whitespace-pre-wrap text-dense text-text">{String((t.output as { answer?: string }).answer ?? '')}</p>
+              <div className="flex flex-col gap-3">
+                <p className="whitespace-pre-wrap text-dense text-text">{String((t.output as { answer?: string }).answer ?? '')}</p>
+                <ListenButton text={String((t.output as { answer?: string }).answer ?? '')} filename="agent-recall-answer.mp3" />
+              </div>
             ) : (
               <p className="text-dense text-text-muted">{t.status === 'failed' ? (t.error ?? 'Failed') : 'Output appears when the last step completes.'}</p>
             )}

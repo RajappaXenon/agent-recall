@@ -92,7 +92,7 @@ async function probeAll(): Promise<IntegrationStatus[]> {
     (['voyage', 'llm', 'elevenlabs'] as const).map(async (key) => {
       const fn = extraProbes.get(key);
       if (!fn) {
-        results.set(key, { status: 'not_configured', detail: 'Provider not wired in this build.', latencyMs: null, meta: {} });
+        results.set(key, { status: 'not_configured', detail: 'No probe registered for this provider.', latencyMs: null, meta: {} });
         return;
       }
       try {

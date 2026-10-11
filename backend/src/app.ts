@@ -22,6 +22,8 @@ import taskRoutes from './routes/tasks.js';
 import devRoutes from './routes/dev.js';
 import eventRoutes from './routes/events.js';
 import insightRoutes from './routes/insights.js';
+import audioRoutes from './routes/audio.js';
+import './services/tts.js';
 import './services/llm/index.js';
 import './services/embeddings.js';
 
@@ -70,6 +72,7 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
       await api.register(devRoutes);
       await api.register(eventRoutes);
       await api.register(insightRoutes);
+      await api.register(audioRoutes);
     },
     { prefix: '/api' },
   );

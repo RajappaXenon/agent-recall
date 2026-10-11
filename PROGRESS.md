@@ -237,3 +237,19 @@ npm run demo:e2e -w backend; node frontend/scripts/screenshots.mjs (full), --onl
 node <dataviz>/scripts/validate_palette.js … --mode dark --surface "#151923"  (4 runs)
 npm test, npm run typecheck, npm run lint, npm run build, npm run demo:reset -w backend
 ```
+
+## Phase 6 — Audio (2026-10-11)
+
+### Done
+- Checked docs.elevenlabs.io: `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}` (`xi-api-key`, `output_format` default `mp3_44100_128`, body `{ text, model_id }`, default model `eleven_multilingual_v2`), `GET /v1/voices/{voice_id}` for the probe.
+- `services/tts.ts`: streaming synthesis (30 s timeout), provider errors mapped to safe messages, live probe (fetches the configured voice) feeding integration status with voice name / model.
+- `GET /api/integrations/elevenlabs/status`, `POST /api/audio/speech` (auth, Zod max 2500 chars, 10/min per user via a `preHandler` rate limit keyed by user id, streams `audio/mpeg`, `Cache-Control: no-store`, nothing stored, `audio.generated` event without content).
+- UI: shared `ListenButton` (generate on demand, loading state, double-click blocked, play/pause, progress, Export audio, Retry on error; disabled with a tooltip pointing to Settings when not connected) beside Playground answers, task output and memory content. Settings "Audio (ElevenLabs)" section: status, voice, model, Test voice, setup steps. The answer text is reused; no second LLM call.
+
+### Gate
+- Without a key (verified live):
+  - `GET /api/integrations/elevenlabs/status?refresh=true` → `"status":"not_configured","detail":"ELEVENLABS_API_KEY is not set. Listen / Export audio are disabled."`
+  - `POST /api/audio/speech` → `{"error":{"code":"TTS_NOT_CONFIGURED",…}} [503]`; 2501 chars → `VALIDATION_ERROR [400]`
+  - Listen buttons render disabled with the explanation (Settings / answer screenshots).
+- **With a real key: NOT verified yet — `ELEVENLABS_API_KEY` / `ELEVENLABS_VOICE_ID` are not set.** Blocker until the user adds them; then: Settings → Refresh → Test voice, and Listen on an answer.
+- Backend tests still 34/34.

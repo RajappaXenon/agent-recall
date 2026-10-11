@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, CircleX, Loader2, RotateCcw, Search, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import type { AnswerResponse, Memory, OutcomeResponse, SearchableResponse } from '@agent-recall/shared';
-import { api, ApiError, requestBlob } from '@/lib/api';
-import { agentKeys, memoryKeys, useAgents, useIntegrations } from '@/lib/queries';
+import { api, ApiError } from '@/lib/api';
+import { agentKeys, memoryKeys, useAgents } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { Panel } from '@/components/ui/panel';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { StatusDot } from '@/components/ui/status-dot';
-import { AudioPlayer } from '@/components/ui/audio-player';
+import { ListenButton } from '@/components/audio/ListenButton';
 import { LatencyChip } from '@/components/ui/latency-chip';
 import { toast } from '@/components/ui/toast';
 
@@ -92,7 +92,6 @@ export function AnswerFlow({
 }) {
   const qc = useQueryClient();
   const agents = useAgents();
-  const integrations = useIntegrations();
   const [agentId, setAgentId] = React.useState<string | undefined>(defaultAgentId);
   const [hoverCite, setHoverCite] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<'worked' | 'failed' | null>(null);
@@ -132,9 +131,6 @@ export function AnswerFlow({
     onHoverMemory?.(id);
   };
 
-  const eleven = integrations.data?.integrations.find((i) => i.key === 'elevenlabs');
-  const audioDisabled =
-    eleven?.status === 'connected' ? null : eleven?.status === 'not_configured' ? 'ElevenLabs is not configured. See Settings to add a key.' : `Audio unavailable: ${eleven?.detail ?? 'status unknown'}`;
   const data = answer.data;
   const cited = new Set(data?.citations ?? []);
 
@@ -196,7 +192,7 @@ export function AnswerFlow({
                 <span data-testid="answer-ready" hidden />
                 <AnswerText text={data.answer} memories={memories} onHover={hover} />
                 <div className="flex flex-wrap items-center gap-2">
-                  <AudioPlayer generate={() => requestBlob('/api/audio/speech', { text: data.answer.replace(/\s*\[mem:[a-f0-9]{24}\]/g, '') })} disabledReason={audioDisabled} />
+                  <ListenButton text={data.answer} filename="agent-recall-answer.mp3" />
                   <Button size="sm" variant="ghost" onClick={() => answer.mutate()} disabled={outcome.isSuccess}>
                     <RotateCcw aria-hidden />
                     Regenerate
