@@ -43,7 +43,7 @@ const searchRoutes: FastifyPluginAsyncZod = async (app) => {
     {
       schema: {
         tags: ['search'],
-        querystring: z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }),
+        querystring: z.object({ page: z.coerce.number().int().min(1).max(1000).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }),
         response: { 200: paginated(RetrievalLogSchema) },
       },
     },

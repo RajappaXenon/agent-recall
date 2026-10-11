@@ -1,6 +1,7 @@
 import { config } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { registerProbe } from './integrations.js';
+import { spendBudget } from '../lib/cost-guard.js';
 
 /** ElevenLabs text-to-speech (optional). Nothing is stored; text features never depend on it. */
 const BASE = 'https://api.elevenlabs.io/v1';
@@ -28,6 +29,7 @@ export async function synthesize(text: string): Promise<{ body: ReadableStream<U
   if (!isTtsConfigured()) {
     throw new AppError(503, 'TTS_NOT_CONFIGURED', 'ElevenLabs is not configured. Set ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID.');
   }
+  spendBudget('tts');
   let res: Response;
   try {
     res = await fetch(`${BASE}/text-to-speech/${encodeURIComponent(config.ELEVENLABS_VOICE_ID!)}?output_format=mp3_44100_128`, {

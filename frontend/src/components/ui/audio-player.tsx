@@ -58,7 +58,13 @@ export function AudioPlayer({
     const el = audioRef.current;
     if (!el) return;
     if (el.src !== url) el.src = url;
-    if (el.paused) await el.play();
+    if (el.paused) {
+      try {
+        await el.play();
+      } catch {
+        setState({ kind: 'error', message: 'The browser could not play this audio.' });
+      }
+    }
     else el.pause();
   };
 

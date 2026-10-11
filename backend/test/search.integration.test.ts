@@ -7,6 +7,7 @@ import { systemActor } from '../src/services/events.js';
 import { isVoyageConfigured } from '../src/services/embeddings.js';
 import { indexAvailability, search, type SearchOptions } from '../src/services/search.js';
 import { searchability } from '../src/services/memory-insights.js';
+import { retrievalLogsRepo } from '../src/db/repositories/index.js';
 import { announceSkip, atlasAvailability, cleanTestOrgs, testOrgs } from './helpers.js';
 
 const atlas = await atlasAvailability();
@@ -101,6 +102,16 @@ describe.skipIf(Boolean(reason))('search modes against Atlas (__test__ org)', ()
       const expected = x.sources.reduce((s, src) => s + 1 / (60 + src.rank), 0);
       expect(x.rrf).toBeCloseTo(expected, 12);
     }
+  });
+
+  it('concurrent runs of one worker step log the retrieval exactly once', async () => {
+    const idempotencyKey = `test-${Date.now()}:1`;
+    const [a, b] = await Promise.all([
+      search(org, 'hybrid', opts({ idempotencyKey }), systemActor, null),
+      search(org, 'hybrid', opts({ idempotencyKey }), systemActor, null),
+    ]);
+    expect(a.logId).toBe(b.logId);
+    expect(await retrievalLogsRepo.count(org, { idempotencyKey })).toBe(1);
   });
 
   it('never returns another tenant’s memories', async () => {

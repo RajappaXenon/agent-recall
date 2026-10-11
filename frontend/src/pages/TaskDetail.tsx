@@ -139,6 +139,16 @@ export default function TaskDetail() {
   const live = task.data?.status === 'running' || task.data?.status === 'queued';
   const checkpoints = useCheckpoints(id, live);
   const events = useEvents({ taskId: id, pageSize: 50 }, live);
+  // Polling stops in the same render the task completes: fetch once more so the last
+  // checkpoint/event written after the previous poll is not missed.
+  const wasLive = React.useRef(live);
+  React.useEffect(() => {
+    if (wasLive.current && !live) {
+      void qc.invalidateQueries({ queryKey: taskKeys.checkpoints(id) });
+      void qc.invalidateQueries({ queryKey: ['events', { taskId: id, pageSize: 50 }] });
+    }
+    wasLive.current = live;
+  }, [live, id, qc]);
   const dev = useDevStatus();
   const agents = useAgents();
   const now = useNow(live);

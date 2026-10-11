@@ -123,25 +123,29 @@ export function ActivityCharts({ data, table }: { data: { date: string; created:
   );
 }
 
+const TYPE_BY_LABEL = new Map(Object.entries(TYPE_META).map(([type, m]) => [m.label, type as MemoryType]));
+
+/** Y-axis tick for the type chart: icon + label (defined once so ticks don't remount every render). */
+function TypeTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const type = payload ? TYPE_BY_LABEL.get(payload.value) : undefined;
+  if (!type) return null;
+  const Icon = TYPE_META[type].icon;
+  return (
+    <g transform={`translate(${(x ?? 0) - 96},${(y ?? 0) - 8})`}>
+      <foreignObject width={92} height={18}>
+        <div className="flex items-center gap-1.5 text-caption text-text-muted">
+          <Icon className={`size-3.5 ${TYPE_META[type].text}`} aria-hidden />
+          {TYPE_META[type].label}
+        </div>
+      </foreignObject>
+    </g>
+  );
+}
+
 /** Horizontal bars; each row carries its type icon + label + value, so colour is never the only cue. */
 export function TypeBars({ data, table }: { data: { type: MemoryType; count: number }[]; table: boolean }) {
   const rows = data.map((d) => ({ ...d, label: TYPE_META[d.type].label }));
   const total = rows.reduce((s, r) => s + r.count, 0);
-  const TypeTick = ({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) => {
-    const row = rows.find((r) => r.label === payload?.value);
-    if (!row) return null;
-    const Icon = TYPE_META[row.type].icon;
-    return (
-      <g transform={`translate(${(x ?? 0) - 96},${(y ?? 0) - 8})`}>
-        <foreignObject width={92} height={18}>
-          <div className="flex items-center gap-1.5 text-caption text-text-muted">
-            <Icon className={`size-3.5 ${TYPE_META[row.type].text}`} aria-hidden />
-            {row.label}
-          </div>
-        </foreignObject>
-      </g>
-    );
-  };
   return (
     <ChartFrame
       title="Memories by type"

@@ -32,20 +32,27 @@ export function ExplorerSearch({
     mutationFn: (v: { q: string; mode: SearchMode }) => api.post<SearchResponse>(`/api/search/${v.mode}`, { query: v.q, limit: 10 }),
   });
 
-  const run = React.useCallback(
-    (q: string, m: SearchMode) => {
-      if (!q.trim()) return;
-      onQueryChange(q.trim());
-      search.mutate({ q: q.trim(), mode: m });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  // Latest callbacks/mutation without re-creating `run` (and without stale closures).
+  const latest = React.useRef({ onQueryChange, mutate: search.mutate });
+  latest.current = { onQueryChange, mutate: search.mutate };
+  const lastRun = React.useRef<string | null>(null);
 
-  React.useEffect(() => {
-    if (initialQuery) run(initialQuery, mode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const run = React.useCallback((q: string, m: SearchMode) => {
+    const query = q.trim();
+    if (!query) return;
+    lastRun.current = query;
+    latest.current.onQueryChange(query);
+    latest.current.mutate({ q: query, mode: m });
   }, []);
+
+  // ?q= from the URL (e.g. the command palette): run it once per distinct query.
+  React.useEffect(() => {
+    if (initialQuery && initialQuery !== lastRun.current) {
+      setQuery(initialQuery);
+      run(initialQuery, mode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
 
   const data = search.data;
   const max = data ? Math.max(...data.results.map((r) => r.score), 0) : 0;

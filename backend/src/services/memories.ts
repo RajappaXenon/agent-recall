@@ -59,26 +59,33 @@ export async function embedMany(orgId: ObjectId, memories: MemoryDoc[]): Promise
   });
   const skipped = memories.length - todo.length;
   if (todo.length === 0) return { embedded: 0, skipped, failed: 0 };
-  try {
-    const vectors = await embedDocuments(todo.map((m) => documentText(m.title, m.content, m.tags)));
-    const now = new Date();
-    await Promise.all(
-      todo.map((m, i) =>
-        memoriesRepo.updateById(orgId, m._id, {
-          $set: {
-            embedding: { vector: vectors[i]!, provider: 'voyage', model, dimensions, contentHash: contentHash(m.title, m.content, m.tags), embeddedAt: now },
-            embeddingStatus: 'ready',
-            embeddingError: null,
-          },
-        }),
-      ),
-    );
-    return { embedded: todo.length, skipped, failed: 0 };
-  } catch (err) {
-    const message = (err as Error).message;
-    await memoriesRepo.updateMany(orgId, { _id: { $in: todo.map((m) => m._id) } }, { $set: { embeddingStatus: 'failed', embeddingError: message } });
-    return { embedded: 0, skipped, failed: todo.length };
+  // Batch by batch: a failure only marks its own batch, earlier vectors are kept.
+  let embedded = 0;
+  let failed = 0;
+  for (let start = 0; start < todo.length; start += 64) {
+    const batch = todo.slice(start, start + 64);
+    try {
+      const vectors = await embedDocuments(batch.map((m) => documentText(m.title, m.content, m.tags)));
+      const now = new Date();
+      await Promise.all(
+        batch.map((m, i) =>
+          memoriesRepo.updateById(orgId, m._id, {
+            $set: {
+              embedding: { vector: vectors[i]!, provider: 'voyage', model, dimensions, contentHash: contentHash(m.title, m.content, m.tags), embeddedAt: now },
+              embeddingStatus: 'ready',
+              embeddingError: null,
+            },
+          }),
+        ),
+      );
+      embedded += batch.length;
+    } catch (err) {
+      const message = (err as Error).message;
+      await memoriesRepo.updateMany(orgId, { _id: { $in: batch.map((m) => m._id) } }, { $set: { embeddingStatus: 'failed', embeddingError: message } });
+      failed += batch.length;
+    }
   }
+  return { embedded, skipped, failed };
 }
 
 export async function assertAgent(orgId: ObjectId, agentId: string | ObjectId) {

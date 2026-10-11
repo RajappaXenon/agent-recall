@@ -122,7 +122,7 @@ export function DataTable<T>({
                       }
                     : undefined
                 }
-                aria-selected={onRowClick ? isActive : undefined}
+                aria-current={isActive || undefined}
                 className={cn(
                   'group transition-colors duration-fast',
                   onRowClick && 'focus-ring cursor-pointer -outline-offset-2',

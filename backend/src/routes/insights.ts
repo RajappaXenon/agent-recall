@@ -7,13 +7,13 @@ const insightRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/overview',
-    { schema: { tags: ['insights'], summary: 'Memory Intelligence metrics, computed from stored data (tagged seed/live/mixed)', response: { 200: OverviewResponseSchema } } },
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { tags: ['insights'], summary: 'Memory Intelligence metrics, computed from stored data (tagged seed/live/mixed)', response: { 200: OverviewResponseSchema } } },
     async (req) => overview(req.auth.orgId),
   );
 
   app.get(
     '/learning',
-    { schema: { tags: ['insights'], summary: 'Outcome analytics: outcomes over time, useful/retrieved memories, verified procedures, recurring problems', response: { 200: LearningResponseSchema } } },
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { tags: ['insights'], summary: 'Outcome analytics: outcomes over time, useful/retrieved memories, verified procedures, recurring problems', response: { 200: LearningResponseSchema } } },
     async (req) => learning(req.auth.orgId),
   );
 };

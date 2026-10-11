@@ -5,26 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { CornerDownLeft, Search } from 'lucide-react';
 import { ALL_NAV } from './nav';
 
-export interface PaletteMemoryHit {
-  id: string;
-  title: string;
-  icon: React.ReactNode;
-}
-
-/** Hook point for memory search results (wired to the API from Phase 2). */
-export const PaletteSearchContext = React.createContext<{
-  useMemoryHits: (q: string) => { hits: PaletteMemoryHit[]; loading: boolean };
-} | null>(null);
-
-function useNoHits() {
-  return { hits: [] as PaletteMemoryHit[], loading: false };
-}
-
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const navigate = useNavigate();
   const [q, setQ] = React.useState('');
-  const ctx = React.useContext(PaletteSearchContext);
-  const { hits, loading } = (ctx?.useMemoryHits ?? useNoHits)(q);
 
   React.useEffect(() => {
     if (!open) setQ('');
@@ -57,7 +40,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </div>
             <Command.List className="max-h-80 overflow-y-auto p-2">
               <Command.Empty className="px-3 py-6 text-center text-dense text-text-muted">
-                {loading ? 'Searching…' : 'No matching pages or memories.'}
+                No matching pages.
               </Command.Empty>
               {q.trim().length > 1 && (
                 <Command.Group
@@ -73,17 +56,6 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                     Search memories for “{q.trim()}”
                     <CornerDownLeft className="ml-auto size-3.5 text-text-muted" aria-hidden />
                   </Command.Item>
-                  {hits.map((h) => (
-                    <Command.Item
-                      key={h.id}
-                      value={`memory ${h.title} ${q}`}
-                      onSelect={() => go(`/memories?open=${h.id}`)}
-                      className="flex h-9 cursor-default items-center gap-3 rounded-control px-2 text-dense text-text data-[selected=true]:bg-surface-raised"
-                    >
-                      {h.icon}
-                      <span className="truncate">{h.title}</span>
-                    </Command.Item>
-                  ))}
                 </Command.Group>
               )}
               <Command.Group

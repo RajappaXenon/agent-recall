@@ -91,7 +91,7 @@ export function Sidebar({
         </div>
         {collapsed ? (
           <Tooltip content="Demo auth — not production-secure" side="right">
-            <span tabIndex={0} className="focus-ring mx-auto flex size-7 items-center justify-center rounded-control text-warning" aria-label="Demo auth — not production-secure">
+            <span tabIndex={0} role="img" className="focus-ring mx-auto flex size-7 items-center justify-center rounded-control text-warning" aria-label="Demo auth — not production-secure">
               <ShieldAlert className="size-4" aria-hidden />
             </span>
           </Tooltip>

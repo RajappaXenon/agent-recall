@@ -3,14 +3,18 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { DevStatusSchema } from '@agent-recall/shared';
 import { config } from '../config.js';
 import { recentWorkers, requestCrash } from '../db/repositories/worker.js';
+import { tasksRepo } from '../db/repositories/index.js';
 import { AppError } from '../lib/errors.js';
 import { logEvent, userActor } from '../services/events.js';
 
 const devRoutes: FastifyPluginAsyncZod = async (app) => {
   app.addHook('onRequest', app.authenticate);
 
-  app.get('/dev/status', { schema: { tags: ['dev'], summary: 'Demo mode flag and live workers (heartbeat ≤ 10 s)', response: { 200: DevStatusSchema } } }, async () => {
+  app.get('/dev/status', { schema: { tags: ['dev'], summary: 'Demo mode flag and live workers (heartbeat ≤ 10 s)', response: { 200: DevStatusSchema } } }, async (req) => {
     const workers = await recentWorkers();
+    // Workers serve every tenant: only reveal task ids that belong to the caller's org.
+    const ids = workers.flatMap((w) => (w.currentTaskId ? [w.currentTaskId] : []));
+    const own = new Set((await tasksRepo.findByIds(req.auth.orgId, ids)).map((t) => String(t._id)));
     return {
       demoMode: config.DEMO_MODE,
       leaseMs: config.LEASE_MS,
@@ -18,7 +22,7 @@ const devRoutes: FastifyPluginAsyncZod = async (app) => {
       workers: workers.map((w) => ({
         workerId: w.workerId ?? 'unknown',
         pid: w.pid ?? null,
-        currentTaskId: w.currentTaskId ? w.currentTaskId.toHexString() : null,
+        currentTaskId: w.currentTaskId && own.has(String(w.currentTaskId)) ? w.currentTaskId.toHexString() : null,
         lastSeen: (w.lastSeen ?? new Date()).toISOString(),
       })),
     };

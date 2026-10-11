@@ -4,6 +4,7 @@ import type { MemoryDoc } from '../db/collections.js';
 import { atlasKeywordSearch, atlasVectorSearch, memoriesRepo, memoryWithVector, retrievalLogsRepo, toObjectId } from '../db/repositories/index.js';
 import { notFound } from '../lib/errors.js';
 import { indexAvailability } from './search.js';
+import { isVoyageConfigured } from './embeddings.js';
 
 const summary = (m: MemoryDoc) => ({
   id: m._id.toHexString(),
@@ -117,7 +118,8 @@ export async function searchability(orgId: ObjectId, id: string): Promise<Search
     const hits = await atlasVectorSearch(orgId, { queryVector: memory.embedding.vector, filter: {}, limit: 5, numCandidates: 50 });
     vector = hits.some((h) => String(h._id) === id);
   }
-  const needsVector = memory.embeddingStatus === 'ready';
+  // A pending embedding (async after an outcome) means the vector index can't find it yet.
+  const needsVector = memory.embeddingStatus === 'ready' || (memory.embeddingStatus === 'pending' && isVoyageConfigured());
   const searchable = keyword && (vector || !needsVector);
   const detail = searchable
     ? needsVector

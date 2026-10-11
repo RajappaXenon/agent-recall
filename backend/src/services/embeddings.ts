@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { config } from '../config.js';
+import { config, scrubSecrets } from '../config.js';
 import { registerProbe } from './integrations.js';
+import { spendBudget } from '../lib/cost-guard.js';
 
 export type InputType = 'document' | 'query';
 
@@ -39,8 +40,13 @@ interface VoyageResponse {
 }
 
 /** Calls the Voyage embeddings API with timeout and exponential backoff on 429/5xx/network errors. */
-async function callVoyage(inputs: string[], inputType: InputType, attempts = 4): Promise<number[][]> {
+async function callVoyage(inputs: string[], inputType: InputType, attempts = 4, timeoutMs = 20_000): Promise<number[][]> {
   if (!config.VOYAGE_API_KEY) throw new EmbeddingError('VOYAGE_API_KEY is not set', false);
+  try {
+    spendBudget('embed');
+  } catch {
+    throw new EmbeddingError('Embedding budget for this minute is used up; try again shortly', true);
+  }
   let lastErr: EmbeddingError | null = null;
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await sleep(Math.min(8000, 500 * 2 ** (attempt - 1)) + Math.random() * 250);
@@ -54,18 +60,18 @@ async function callVoyage(inputs: string[], inputType: InputType, attempts = 4):
           input_type: inputType,
           output_dimension: config.VOYAGE_DIMENSIONS,
         }),
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {
-        // Provider bodies stay server-side; only status + a short reason propagate.
+        // Provider bodies stay server-side (logged, scrubbed); clients get the status and a fixed reason.
         const body = await res.text().catch(() => '');
-        const reason = (() => {
-          try {
-            return String((JSON.parse(body) as { detail?: string }).detail ?? '').slice(0, 160);
-          } catch {
-            return '';
-          }
-        })();
+        console.warn(`[embeddings] Voyage HTTP ${res.status}: ${scrubSecrets(body.slice(0, 300))}`);
+        const reason =
+          res.status === 401 ? 'API key rejected' :
+          res.status === 403 ? 'key not allowed on this endpoint' :
+          res.status === 429 ? 'rate limited' :
+          res.status === 400 || res.status === 422 ? 'request rejected' :
+          res.status >= 500 ? 'provider error' : '';
         const retriable = res.status === 429 || res.status >= 500;
         if (res.status === 403 && /Atlas|endpoint/i.test(body)) {
           throw new EmbeddingError(
@@ -113,7 +119,7 @@ export async function embedQuery(query: string): Promise<{ vector: number[]; cac
     queryCache.set(key, hit);
     return { vector: hit, cached: true };
   }
-  const [vector] = await callVoyage([query], 'query', 3);
+  const [vector] = await callVoyage([query], 'query', 2, 8_000);
   if (!vector) throw new EmbeddingError('Voyage returned no embedding', false);
   queryCache.set(key, vector);
   if (queryCache.size > QUERY_CACHE_MAX) queryCache.delete(queryCache.keys().next().value as string);

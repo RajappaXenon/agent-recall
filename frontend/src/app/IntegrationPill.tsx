@@ -8,6 +8,7 @@ import { INTEGRATION_STATUS_LABEL, integrationTone, qk, useIntegrations, worstTo
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { StatusDot } from '@/components/ui/status-dot';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as React from 'react';
 
@@ -28,6 +29,8 @@ export function IntegrationPill() {
     try {
       const fresh = await api.get<IntegrationsResponse>('/api/integrations/status?refresh=true');
       qc.setQueryData(qk.integrations, fresh);
+    } catch {
+      toast.error('Could not refresh integration status.');
     } finally {
       setRefreshing(false);
     }

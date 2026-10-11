@@ -76,13 +76,13 @@ export async function regexFallbackSearch(orgId: ObjectId, opts: { terms: string
   const re = new RegExp(escaped.join('|'), 'i');
   const docs = await memories
     .find(
-      { ...opts.filter, orgId: assertOrgId(orgId), archived: false, $or: [{ title: re }, { content: re }] },
-      { projection: { 'embedding.vector': 0 }, limit: 200 },
+      { ...opts.filter, orgId: assertOrgId(orgId), archived: false, $or: [{ title: re }, { content: re }, { tags: re }] },
+      { projection: { 'embedding.vector': 0 }, sort: { createdAt: -1 }, limit: 1000 },
     )
     .toArray();
   // Score = number of distinct query terms present (a plain count, labelled "regex").
   const scored = docs.map((d) => {
-    const text = `${d.title} ${d.content}`.toLowerCase();
+    const text = `${d.title} ${d.content} ${d.tags.join(' ')}`.toLowerCase();
     const score = opts.terms.filter((t) => text.includes(t.toLowerCase())).length;
     return { ...d, _score: score } as SearchHit;
   });

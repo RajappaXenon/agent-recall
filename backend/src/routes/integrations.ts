@@ -8,6 +8,8 @@ const integrationRoutes: FastifyPluginAsyncZod = async (app) => {
     '/integrations/status',
     {
       onRequest: [app.authenticate],
+      // ?refresh=true runs live probes against paid providers.
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
       schema: {
         tags: ['integrations'],
         summary: 'Live probe of every integration (cached 60 s; ?refresh=true re-probes)',

@@ -4,16 +4,23 @@ import { closeMongo, describeMongoError, isMongoConfigured } from './db/client.j
 import { ensureRegularIndexes } from './db/indexes.js';
 
 // Only the API signs tokens, so only the API requires a real secret in production.
-if (config.NODE_ENV === 'production' && config.JWT_SECRET.startsWith('dev-only')) {
-  throw new Error('JWT_SECRET must be set in production');
+if (
+  config.NODE_ENV === 'production' &&
+  (config.JWT_SECRET.startsWith('dev-only') || config.JWT_SECRET.startsWith('change-me') || config.JWT_SECRET.length < 32)
+) {
+  throw new Error('JWT_SECRET must be a random value of at least 32 characters in production');
 }
 
 const app = await buildApp();
 
 if (isMongoConfigured()) {
-  ensureRegularIndexes()
-    .then((r) => app.log.info({ collections: r.length }, 'Regular indexes ensured'))
-    .catch((err: unknown) => app.log.warn(describeMongoError(err)));
+  // Unique indexes (one outcome per task, checkpoint idempotency) must exist before requests arrive.
+  try {
+    const r = await ensureRegularIndexes();
+    app.log.info({ collections: r.length }, 'Regular indexes ensured');
+  } catch (err) {
+    app.log.warn(describeMongoError(err));
+  }
 } else {
   app.log.warn('MONGODB_URI is not set: /api/ready will report not_ready until it is added to .env');
 }

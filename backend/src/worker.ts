@@ -8,8 +8,8 @@
  * DEMO_MODE crash request: exit(1) between steps without releasing anything.
  */
 import { randomBytes } from 'node:crypto';
-import { MongoServerError, ObjectId } from 'mongodb';
-import { config } from './config.js';
+import { MongoError, MongoNetworkError, MongoServerError, MongoServerSelectionError, ObjectId } from 'mongodb';
+import { config, scrubSecrets } from './config.js';
 import { closeMongo, describeMongoError, getClient } from './db/client.js';
 import type { TaskDoc } from './db/collections.js';
 import { ensureRegularIndexes } from './db/indexes.js';
@@ -25,7 +25,7 @@ import {
 } from './db/repositories/worker.js';
 import { logEvent, workerActor } from './services/events.js';
 import { PLAYBOOK_STEPS, STEP_FNS } from './services/playbook.js';
-import './services/embeddings.js';
+import { EmbeddingError } from './services/embeddings.js';
 
 const WORKER_ID = process.env.WORKER_ID || `worker-${randomBytes(2).toString('hex')}`;
 const ONLY_ORG = process.env.WORKER_ORG_ID && ObjectId.isValid(process.env.WORKER_ORG_ID) ? new ObjectId(process.env.WORKER_ORG_ID) : undefined;
@@ -33,6 +33,18 @@ const LEASE_MS = config.LEASE_MS;
 const STEP_DELAY_MS = config.DEMO_STEP_DELAY_MS;
 const POLL_MS = 1000;
 const CRASH_REQUEST_MAX_AGE_MS = 120_000;
+/** A task that has been claimed this many times (crashes, retries) is failed instead of looping forever. */
+const MAX_ATTEMPTS = 5;
+
+/** Errors worth retrying on another attempt rather than failing the task. */
+function isTransient(err: unknown): boolean {
+  if (err instanceof EmbeddingError) return err.retriable;
+  if (err instanceof MongoNetworkError || err instanceof MongoServerSelectionError) return true;
+  if (err instanceof MongoError) {
+    return ['TransientTransactionError', 'UnknownTransactionCommitResult', 'RetryableWriteError'].some((l) => err.hasErrorLabel(l));
+  }
+  return false;
+}
 
 const actor = workerActor(WORKER_ID);
 const log = (msg: string) => console.log(`${new Date().toISOString()} [${WORKER_ID}] ${msg}`);
@@ -86,7 +98,8 @@ async function runTask(task: TaskDoc) {
 
     for (let i = startAt; i < PLAYBOOK_STEPS.length; i++) {
       if (leaseLost) throw new LeaseLost();
-      await tasksRepo.updateMany(orgId, { _id: task._id, workerId: WORKER_ID }, { $set: { [`steps.${i}.status`]: 'running', currentStep: i } });
+      const started = await tasksRepo.updateMany(orgId, { _id: task._id, workerId: WORKER_ID }, { $set: { [`steps.${i}.status`]: 'running', currentStep: i } });
+      if (started.matchedCount !== 1) throw new LeaseLost();
       // Execution record: lets tests prove completed steps never run twice.
       await stepExecutionsRepo.insertOne(orgId, { taskId: task._id, stepIndex: i, workerId: WORKER_ID, attempt: task.attempt });
       log(`step ${i + 1}/${PLAYBOOK_STEPS.length} ${PLAYBOOK_STEPS[i]}…`);
@@ -168,10 +181,22 @@ async function runTask(task: TaskDoc) {
       await logEvent(orgId, { type: 'task.lease_lost', status: 'warning', actor, summary: `${WORKER_ID} lost the lease and stopped`, taskId: task._id, agentId: task.agentId });
       return;
     }
-    const message = err instanceof Error ? err.message.slice(0, 300) : 'Step failed';
-    log(`task ${task._id} failed: ${message}`);
-    await tasksRepo.updateMany(orgId, { _id: task._id, workerId: WORKER_ID }, { $set: { status: 'failed', error: message, leaseExpiresAt: null } });
-    await logEvent(orgId, { type: 'task.failed', status: 'error', actor, summary: `Playbook failed: ${message}`, taskId: task._id, agentId: task.agentId });
+    const message = scrubSecrets(err instanceof Error ? err.message : 'Step failed').slice(0, 300);
+    try {
+      if (isTransient(err) && task.attempt < MAX_ATTEMPTS) {
+        // Give the task back: the next claim resumes from the last committed checkpoint.
+        log(`task ${task._id} hit a transient error, releasing for retry: ${message}`);
+        await releaseLease(task._id, WORKER_ID);
+        await logEvent(orgId, { type: 'task.retry', status: 'warning', actor, summary: `Transient error; task released for another attempt (${task.attempt}/${MAX_ATTEMPTS})`, taskId: task._id, agentId: task.agentId });
+        return;
+      }
+      log(`task ${task._id} failed: ${message}`);
+      await tasksRepo.updateMany(orgId, { _id: task._id, workerId: WORKER_ID }, { $set: { status: 'failed', error: 'A step failed. See the worker log for details.', leaseExpiresAt: null } });
+      await logEvent(orgId, { type: 'task.failed', status: 'error', actor, summary: 'Playbook failed: a step raised an error', taskId: task._id, agentId: task.agentId });
+    } catch (inner) {
+      // The database is unavailable too: leave the lease to expire so another attempt picks it up.
+      log(`could not record the failure of task ${task._id}: ${describeMongoError(inner)}`);
+    }
   } finally {
     clearInterval(beat);
   }
@@ -180,41 +205,62 @@ async function runTask(task: TaskDoc) {
 async function main() {
   await ensureRegularIndexes();
   log(`started (lease ${LEASE_MS} ms, step delay ${STEP_DELAY_MS} ms${ONLY_ORG ? `, org ${ONLY_ORG.toHexString()} only` : ''})`);
-  // A general worker never touches integration-test tenants; tests run their own scoped workers.
-  const excludeOrgIds = ONLY_ORG ? [] : await testOrgIds();
+  let excludeOrgIds: ObjectId[] = [];
+  let excludeRefreshedAt = 0;
   let lastBeat = 0;
+  let backoff = POLL_MS;
   while (!stopping) {
-    if (Date.now() - lastBeat > 2000) {
-      await workerHeartbeat(WORKER_ID, currentTask?._id ?? null).catch(() => {});
-      lastBeat = Date.now();
+    try {
+      if (Date.now() - lastBeat > 2000) {
+        await workerHeartbeat(WORKER_ID, null).catch(() => {});
+        lastBeat = Date.now();
+      }
+      // A general worker never touches integration-test tenants (refreshed: tests create them later).
+      if (!ONLY_ORG && Date.now() - excludeRefreshedAt > 60_000) {
+        excludeOrgIds = await testOrgIds();
+        excludeRefreshedAt = Date.now();
+      }
+      if (stopping) break;
+      const task = await claimNextPlaybook(WORKER_ID, LEASE_MS, { onlyOrgId: ONLY_ORG, excludeOrgIds });
+      backoff = POLL_MS;
+      if (!task) {
+        await sleep(POLL_MS);
+        continue;
+      }
+      if (task.attempt > MAX_ATTEMPTS) {
+        await tasksRepo.updateMany(task.orgId, { _id: task._id, workerId: WORKER_ID }, {
+          $set: { status: 'failed', error: `Gave up after ${MAX_ATTEMPTS} attempts.`, leaseExpiresAt: null },
+        });
+        await logEvent(task.orgId, { type: 'task.failed', status: 'error', actor, summary: `Playbook failed after ${MAX_ATTEMPTS} attempts`, taskId: task._id, agentId: task.agentId });
+        continue;
+      }
+      currentTask = task;
+      await workerHeartbeat(WORKER_ID, task._id).catch(() => {});
+      await runTask(task);
+    } catch (err) {
+      // Transient database trouble must not kill the worker: back off and keep polling.
+      log(`poll error, retrying in ${backoff} ms: ${describeMongoError(err)}`);
+      await sleep(backoff);
+      backoff = Math.min(backoff * 2, 30_000);
+    } finally {
+      currentTask = null;
     }
-    const task = await claimNextPlaybook(WORKER_ID, LEASE_MS, { onlyOrgId: ONLY_ORG, excludeOrgIds });
-    if (!task) {
-      await sleep(POLL_MS);
-      continue;
-    }
-    currentTask = task;
-    await workerHeartbeat(WORKER_ID, task._id).catch(() => {});
-    await runTask(task);
-    currentTask = null;
   }
+  // Shutdown is owned here, after the loop: no claim can start once `stopping` is set.
+  await removeWorkerHeartbeat(WORKER_ID).catch(() => {});
+  await closeMongo();
+  log('stopped');
+  process.exit(0);
 }
 
-async function shutdown(signal: string) {
+function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;
+  // runTask checks `stopping` after each committed step and releases the lease; idle polling exits within POLL_MS.
   log(`${signal} received${currentTask ? ': finishing the current step' : ''}`);
-  // If idle, exit now; otherwise runTask returns after committing the current step.
-  const wait = async () => {
-    while (currentTask) await sleep(200);
-    await removeWorkerHeartbeat(WORKER_ID).catch(() => {});
-    await closeMongo();
-    process.exit(0);
-  };
-  void wait();
 }
-process.on('SIGTERM', () => void shutdown('SIGTERM'));
-process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 main().catch(async (err) => {
   console.error(`[${WORKER_ID}] fatal: ${describeMongoError(err)}`);

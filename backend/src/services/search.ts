@@ -1,4 +1,4 @@
-import type { Document, ObjectId } from 'mongodb';
+import { MongoServerError, type Document, type ObjectId } from 'mongodb';
 import type {
   Engine,
   Explanation,
@@ -47,7 +47,14 @@ const ms = (start: number) => Math.round((performance.now() - start) * 10) / 10;
 let indexCache: { at: number; search: boolean; vector: boolean; vectorStatus: string } | null = null;
 export async function indexAvailability(force = false) {
   if (!force && indexCache && Date.now() - indexCache.at < 30_000) return indexCache;
-  const list = await listMemorySearchIndexes();
+  let list: Awaited<ReturnType<typeof listMemorySearchIndexes>>;
+  try {
+    list = await listMemorySearchIndexes();
+  } catch (err) {
+    // A transient listing error shouldn't turn every search into a 500: reuse the last known state.
+    if (indexCache) return indexCache;
+    throw err;
+  }
   const s = list.find((i) => i.name === SEARCH_INDEX_NAME);
   const v = list.find((i) => i.name === VECTOR_INDEX_NAME);
   indexCache = { at: Date.now(), search: Boolean(s?.queryable), vector: Boolean(v?.queryable), vectorStatus: v ? v.status : 'missing' };
@@ -199,13 +206,16 @@ async function runSemantic(orgId: ObjectId, o: SearchOptions, limit: number): Pr
   }
   const embedMs = ms(embedStart);
   const vecStart = now();
+  // Tags and dates are not vector-index filter fields, so they are applied afterwards; over-fetch
+  // in that case so a selective filter doesn't leave the result empty.
+  const postFilter = Boolean(o.filters.tags?.length || o.filters.from || o.filters.to);
   let hits: SearchHit[];
   try {
     hits = await atlasVectorSearch(orgId, {
       queryVector: vector,
       filter: vectorFilter(o.filters),
-      limit: Math.max(limit, COMPONENT_LIMIT),
-      numCandidates: 200,
+      limit: postFilter ? 200 : Math.max(limit, COMPONENT_LIMIT),
+      numCandidates: postFilter ? 1000 : 200,
       indexName: o.indexNames?.vector,
     });
   } catch (err) {
@@ -400,16 +410,12 @@ export async function search(orgId: ObjectId, mode: SearchMode, o: SearchOptions
     res = await hybrid(orgId, o);
   }
 
-  // A worker step that reruns after a crash passes its idempotency key: reuse the earlier log, don't count twice.
-  if (o.idempotencyKey) {
-    const prior = (await retrievalLogsRepo.find(orgId, { idempotencyKey: o.idempotencyKey }, { limit: 1 }))[0];
-    if (prior) {
-      res.logId = prior._id.toHexString();
-      return res;
-    }
-  }
-
-  const log = await retrievalLogsRepo.insertOne(orgId, {
+  // A worker step that reruns after a crash passes its idempotency key. Insert first: the unique
+  // `retrieval_idempotency` index makes this atomic, so two workers on the same step can't both
+  // count the retrieval (find-then-insert would race and fail the task on the duplicate).
+  let log: Awaited<ReturnType<typeof retrievalLogsRepo.insertOne>>;
+  try {
+    log = await retrievalLogsRepo.insertOne(orgId, {
     ...(o.idempotencyKey ? { idempotencyKey: o.idempotencyKey } : {}),
     query: o.query,
     mode,
@@ -421,6 +427,16 @@ export async function search(orgId: ObjectId, mode: SearchMode, o: SearchOptions
     warnings: res.warnings,
     userId,
   });
+  } catch (err) {
+    if (o.idempotencyKey && err instanceof MongoServerError && err.code === 11000) {
+      const prior = (await retrievalLogsRepo.find(orgId, { idempotencyKey: o.idempotencyKey }, { limit: 1 }))[0];
+      if (prior) {
+        res.logId = prior._id.toHexString();
+        return res;
+      }
+    }
+    throw err;
+  }
   res.logId = log._id.toHexString();
 
   const ids = res.results.map((r) => toObjectId(r.memory.id));

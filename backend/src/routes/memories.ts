@@ -52,7 +52,7 @@ const memoryRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.patch(
     '/memories/:id',
-    { schema: { tags: ['memories'], params: Params, body: UpdateMemorySchema, response: { 200: MemorySchema } } },
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { tags: ['memories'], params: Params, body: UpdateMemorySchema, response: { 200: MemorySchema } } },
     async (req) => toMemory(await updateMemory(req.auth.orgId, req.params.id, req.body, userActor(req.auth.userId))),
   );
 
@@ -64,7 +64,7 @@ const memoryRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/memories/:id/related',
-    { schema: { tags: ['memories'], params: Params, response: { 200: MemoryRelatedResponseSchema } } },
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { tags: ['memories'], params: Params, response: { 200: MemoryRelatedResponseSchema } } },
     async (req) => relatedMemories(req.auth.orgId, req.params.id),
   );
 

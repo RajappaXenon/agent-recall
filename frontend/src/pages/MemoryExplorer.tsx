@@ -26,7 +26,7 @@ export default function MemoryExplorer() {
   const [creating, setCreating] = React.useState(false);
 
   const get = (k: string) => params.get(k) ?? undefined;
-  const page = Number(get('page') ?? 1);
+  const page = Math.max(1, Math.floor(Number(get('page') ?? 1)) || 1);
   const filters = {
     agentId: get('agentId'),
     type: get('type'),
@@ -37,15 +37,25 @@ export default function MemoryExplorer() {
   const openId = get('open') ?? null;
   const q = get('q') ?? '';
 
-  const set = (patch: Record<string, string | undefined>, resetPage = true) => {
-    const next = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === undefined || v === ALL || v === '') next.delete(k);
-      else next.set(k, v);
-    }
-    if (resetPage && !('page' in patch)) next.delete('page');
-    setParams(next, { replace: true });
-  };
+  // Functional update: callbacks captured in earlier renders (e.g. the search box) still build on
+  // the current URL instead of dropping filters set since.
+  const set = React.useCallback(
+    (patch: Record<string, string | undefined>, resetPage = true) => {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [k, v] of Object.entries(patch)) {
+            if (v === undefined || v === ALL || v === '') next.delete(k);
+            else next.set(k, v);
+          }
+          if (resetPage && !('page' in patch)) next.delete('page');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
 
   const list = useMemories({ page, pageSize: PAGE_SIZE, ...filters });
   const agentName = (id: string) => agents.data?.find((a) => a.id === id)?.name ?? '—';
@@ -93,7 +103,26 @@ export default function MemoryExplorer() {
         className="mt-4"
         flush
         title="All memories"
-        meta={list.data ? <span className="tabular">{total} {total === 1 ? 'memory' : 'memories'}</span> : null}
+        meta={
+          <>
+            {list.data && (
+              <span className="tabular">
+                {total} {total === 1 ? 'memory' : 'memories'}
+              </span>
+            )}
+            {filters.tag && (
+              <button
+                type="button"
+                onClick={() => set({ tag: undefined })}
+                className="focus-ring inline-flex h-5 items-center gap-1 rounded-control border border-accent/40 bg-accent/10 px-1.5 font-mono text-caption text-accent hover:bg-accent/20"
+                aria-label={`Remove tag filter ${filters.tag}`}
+              >
+                tag: {filters.tag}
+                <X className="size-3" aria-hidden />
+              </button>
+            )}
+          </>
+        }
         actions={
           <div className="hidden flex-wrap items-center gap-2 md:flex">
             <FilterBar filters={filters} set={set} agents={agents.data ?? []} />

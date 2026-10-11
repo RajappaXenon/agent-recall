@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ObjectId } from 'mongodb';
 import { closeMongo } from '../src/db/client.js';
-import { memoriesRepo } from '../src/db/repositories/index.js';
+import { memoriesRepo, outcomesRepo, tasksRepo } from '../src/db/repositories/index.js';
 import { createAgent } from '../src/services/agents.js';
 import { createAnswer } from '../src/services/answers.js';
 import { createMemory } from '../src/services/memories.js';
@@ -87,6 +87,32 @@ describe.skipIf(!atlas.ok)('outcome verification rules (__test__ org)', () => {
     const taskId = await answer([await proc('Fix D')]);
     await recordOutcome(org, user, taskId, { result: 'worked', notes: '' }, systemActor);
     await expect(recordOutcome(org, user, taskId, { result: 'failed', notes: '' }, systemActor)).rejects.toMatchObject({ code: 'OUTCOME_EXISTS' });
+  });
+
+  it('concurrent worked + failed outcomes never leave a procedure demoted', async () => {
+    const p = await proc('Contended fix F');
+    const [t1, t2] = [await answer([p]), await answer([p])];
+    const results = await Promise.allSettled([
+      recordOutcome(org, user, t1, { result: 'worked', notes: '' }, systemActor),
+      recordOutcome(org, user, t2, { result: 'failed', notes: '' }, systemActor),
+    ]);
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    const after = (await memoriesRepo.findById(org, p))!;
+    // Whatever the commit order, a success wins and both outcomes are kept as evidence.
+    expect(after.verification.status).toBe('verified_success');
+    expect(after.verification.outcomeIds).toHaveLength(2);
+  });
+
+  it('a retried outcome whose memory was never created is finished, not rejected', async () => {
+    const p = await proc('Fix G');
+    const taskId = await answer([p]);
+    const task = (await tasksRepo.findById(org, taskId))!;
+    // Simulate a crash after the transaction committed but before the memory was created.
+    await outcomesRepo.insertOne(org, { taskId: task._id, agentId: task.agentId, result: 'worked', feedback: null, notes: '', citedMemoryIds: [], createdMemoryId: null, userId: user });
+    const res = await recordOutcome(org, user, taskId, { result: 'worked', notes: '' }, systemActor);
+    expect(res.createdMemory.provenance.outcomeId).toBe(res.outcomeId);
+    const stored = (await outcomesRepo.find(org, { taskId: task._id }))[0]!;
+    expect(String(stored.createdMemoryId)).toBe(res.createdMemory.id);
   });
 
   it('cannot record an outcome on another tenant’s task', async () => {

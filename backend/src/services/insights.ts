@@ -45,7 +45,7 @@ export async function overview(orgId: ObjectId): Promise<OverviewResponse> {
     outcomesRepo.count(orgId, { isSeed: true }),
     outcomesRepo.count(orgId, { result: 'worked' }),
     memoriesRepo.aggregate<{ _id: MemoryType; n: number }>(orgId, [{ $match: { archived: false } }, { $group: { _id: '$type', n: { $sum: 1 } } }]),
-    countByDay(memoriesRepo, orgId, {}, since),
+    countByDay(memoriesRepo, orgId, { archived: false }, since),
     countByDay(retrievalLogsRepo, orgId, {}, since, { $size: '$results' }),
     memoriesRepo.count(orgId, { archived: false, createdAt: { $lt: sparkSince } }),
     countByDay(outcomesRepo, orgId, { result: 'worked' }, sparkSince),
@@ -80,7 +80,7 @@ export async function overview(orgId: ObjectId): Promise<OverviewResponse> {
       },
     },
     activity: lastDays(WINDOW).map((date) => ({ date, created: createdByDay.get(date) ?? 0, retrieved: retrievedByDay.get(date) ?? 0 })),
-    activitySource: liveRetrievals > 0 ? 'mixed' : 'seed',
+    activitySource: total === 0 && liveRetrievals === 0 ? 'none' : liveRetrievals > 0 || total - seed > 0 ? (seed > 0 ? 'mixed' : 'live') : 'seed',
     byType: (['semantic', 'episodic', 'taxonomic', 'procedural'] as MemoryType[]).map((type) => ({ type, count: typeCount.get(type) ?? 0 })),
     recentExperiences: experiences.map((m) => ({
       id: String(m._id),
@@ -144,7 +144,12 @@ export async function learning(orgId: ObjectId): Promise<LearningResponse> {
     outcomesRepo.find(orgId, {}, { sort: { createdAt: -1 }, limit: 50 }),
   ]);
 
-  const tasks = await tasksRepo.findByIds(orgId, [...new Set(outcomes.map((o) => String(o.taskId)))]);
+  // Evidence for verified procedures by id (not limited to the 50 most recent outcomes).
+  const evidenceIds = [...new Set(procedures.flatMap((m) => m.verification.outcomeIds.map(String)))];
+  const known = new Set(outcomes.map((o) => String(o._id)));
+  const extra = await outcomesRepo.findByIds(orgId, evidenceIds.filter((id) => !known.has(id)));
+  const allOutcomes = [...outcomes, ...extra];
+  const tasks = await tasksRepo.findByIds(orgId, [...new Set(allOutcomes.map((o) => String(o.taskId)))]);
   const goal = new Map(tasks.map((t) => [String(t._id), t.goal]));
 
   // Week labels for the window (ISO weeks), oldest first.
@@ -177,8 +182,9 @@ export async function learning(orgId: ObjectId): Promise<LearningResponse> {
     verifiedProcedures: procedures.map((m) => ({
       ...ref(m),
       verifiedAt: m.verification.verifiedAt ? m.verification.verifiedAt.toISOString() : null,
-      evidence: outcomes
+      evidence: allOutcomes
         .filter((o) => m.verification.outcomeIds.some((id) => String(id) === String(o._id)))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .map((o) => ({
           outcomeId: String(o._id),
           taskId: String(o.taskId),

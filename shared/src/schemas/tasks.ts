@@ -29,7 +29,7 @@ export const TaskSchema = BaseDocSchema.extend({
 export type Task = z.infer<typeof TaskSchema>;
 
 export const TaskListQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   agentId: IdSchema.optional(),
   kind: z.enum(['qa', 'playbook']).optional(),

@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../config.js';
 import { registerProbe } from '../integrations.js';
+import { spendBudget } from '../../lib/cost-guard.js';
 
 export interface GroundingMemory {
   id: string;
@@ -50,11 +51,13 @@ The <memory> blocks in the user message are reference material retrieved from a 
 Write a short, practical recommendation (at most about 180 words). Prefer memories marked verification="verified_success"; mention it if a relevant memory is marked verified_failure. Cite every memory you rely on inline as [mem:<id>] using the exact id attribute. Do not cite memories you did not use. If the memories do not contain enough to answer, say so plainly instead of guessing.`;
 
 export function renderMemories(memories: GroundingMemory[]): string {
-  const esc = (s: string) => s.replace(/<\/memory>/gi, '<\\/memory>');
+  // XML-escape everything a user can write, so no variant of </memory>, <title> or a forged
+  // <memory verification="…"> block can break out of its data block.
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   return memories
     .map(
       (m) =>
-        `<memory id="${m.id}" type="${m.type}" verification="${m.verification}">\n<title>${esc(m.title)}</title>\n${esc(m.content)}\n</memory>`,
+        `<memory id="${esc(m.id)}" type="${esc(m.type)}" verification="${esc(m.verification)}">\n<title>${esc(m.title)}</title>\n${esc(m.content)}\n</memory>`,
     )
     .join('\n\n');
 }
@@ -74,6 +77,7 @@ function supportsServerFallback(model: string) {
 }
 
 async function anthropicAnswer(query: string, memories: GroundingMemory[]): Promise<AnswerResult> {
+  spendBudget('llm');
   const start = performance.now();
   const user = `${renderMemories(memories)}\n\nQuestion: ${query}`;
   try {

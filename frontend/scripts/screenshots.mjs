@@ -27,6 +27,10 @@ const VIEWPORTS = [
   { name: '390', width: 390, height: 844 },
 ];
 
+
+/** Waits for a state; on timeout logs a warning (the screenshot is still taken) instead of failing silently. */
+const expect = (label) => (err) => console.warn(`  ! ${label} did not appear (${String(err?.message ?? err).split('\n')[0]})`);
+
 const settle = async (page) => {
   await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
   await page.waitForTimeout(300);
@@ -57,7 +61,7 @@ const SHOTS = [
       const btn = page.getByRole('button', { name: /Run all/ });
       if (await btn.count()) {
         await btn.first().click();
-        await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
+        await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(expect('results-ready'));
         await page.waitForTimeout(900);
       }
     },
@@ -70,7 +74,7 @@ const SHOTS = [
       const btn = page.getByRole('button', { name: /Run all/ });
       if (await btn.count()) {
         await btn.first().click();
-        await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
+        await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(expect('results-ready'));
         await page.waitForTimeout(900);
         const row = page.locator('[data-column="hybrid"] [data-memory-id]').first();
         if (await row.count()) await row.hover();
@@ -87,7 +91,7 @@ const SHOTS = [
       const btn = page.getByRole('button', { name: /Run all/ });
       if (!(await btn.count())) return;
       await btn.first().click();
-      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
+      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(expect('results-ready'));
       const boxes = page.locator('[data-column="hybrid"] button[role="checkbox"]');
       const n = Math.min(2, await boxes.count());
       await page.waitForTimeout(900);
@@ -95,7 +99,7 @@ const SHOTS = [
       const use = page.getByRole('button', { name: /Use in agent task/ });
       if (await use.count()) {
         await use.first().click();
-        await page.waitForSelector('[data-testid="answer-ready"]', { state: 'attached', timeout: 45_000 }).catch(() => {});
+        await page.waitForSelector('[data-testid="answer-ready"]', { state: 'attached', timeout: 45_000 }).catch(expect('answer-ready'));
         await page.waitForTimeout(400);
       }
     },
@@ -106,7 +110,7 @@ const SHOTS = [
     viewports: ['1440'],
     action: async (page) => {
       await page.getByRole('button', { name: /Run all/ }).first().click();
-      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
+      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(expect('results-ready'));
       await page.waitForTimeout(900);
     },
   },
@@ -117,18 +121,18 @@ const SHOTS = [
     viewports: ['1440'],
     action: async (page) => {
       await page.getByRole('button', { name: /Run all/ }).first().click();
-      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
+      await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(expect('results-ready'));
       const boxes = page.locator('[data-column="hybrid"] button[role="checkbox"]');
       await page.waitForTimeout(900);
       for (let i = 0; i < Math.min(2, await boxes.count()); i++) await boxes.nth(i).click();
       await page.getByRole('button', { name: /Use in agent task/ }).first().click();
-      await page.waitForSelector('[data-testid="answer-ready"]', { state: 'attached', timeout: 45_000 }).catch(() => {});
+      await page.waitForSelector('[data-testid="answer-ready"]', { state: 'attached', timeout: 45_000 }).catch(expect('answer-ready'));
       await page.getByRole('button', { name: 'Worked', exact: true }).click();
       await page.getByRole('button', { name: 'Helpful', exact: true }).click();
       await page.getByLabel('Notes').fill('Raised maxPoolSize to 80 and closed export cursors; p99 back under 200 ms.');
       await page.getByRole('button', { name: 'Record outcome' }).click();
-      await page.waitForSelector('[data-testid="created-memory"]', { timeout: 30_000 }).catch(() => {});
-      await page.getByText('Searchable', { exact: true }).waitFor({ timeout: 30_000 }).catch(() => {});
+      await page.waitForSelector('[data-testid="created-memory"]', { timeout: 30_000 }).catch(expect('created-memory'));
+      await page.getByText('Searchable', { exact: true }).waitFor({ timeout: 30_000 }).catch(expect('Searchable state'));
       await page.waitForTimeout(300);
     },
   },

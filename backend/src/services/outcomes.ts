@@ -6,7 +6,7 @@ import { memoriesRepo, outcomesRepo, tasksRepo, toObjectId } from '../db/reposit
 import { AppError, notFound } from '../lib/errors.js';
 import { toMemory } from '../lib/serialize.js';
 import { logEvent, type Actor } from './events.js';
-import { createMemory } from './memories.js';
+import { createMemory, embedMemory } from './memories.js';
 
 const stripCitations = (s: string) => s.replace(/\s*\[mem:[a-f0-9]{24}\]/g, '').trim();
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -68,7 +68,15 @@ export async function recordOutcome(
         );
       }
 
-      for (const m of citedDocs.filter((d) => d.type === 'procedural')) {
+      // Read statuses inside the transaction: a concurrent outcome on the same memory causes a
+      // write conflict, and the retried callback then sees the committed status, so a failure can
+      // never demote a procedure that another outcome just verified.
+      const procedural = (await memoriesRepo.find(
+        orgId,
+        { _id: { $in: cited }, type: 'procedural' },
+        { session, projection: { 'embedding.vector': 0 } },
+      )) as MemoryDoc[];
+      for (const m of procedural) {
         const from = m.verification.status;
         let to: VerificationStatus = from;
         let note: string;
@@ -95,9 +103,16 @@ export async function recordOutcome(
     });
   } catch (err) {
     if (err instanceof MongoServerError && err.code === 11000) {
-      throw new AppError(409, 'OUTCOME_EXISTS', 'An outcome has already been recorded for this task.');
+      // A retry after a partial failure finishes the existing outcome instead of failing.
+      const existing = (await outcomesRepo.find(orgId, { taskId: task._id }, { limit: 1 }))[0];
+      if (!existing || existing.createdMemoryId || existing.result !== req.result) {
+        throw new AppError(409, 'OUTCOME_EXISTS', 'An outcome has already been recorded for this task.');
+      }
+      outcomeId = existing._id;
+      verificationChanges.length = 0;
+    } else {
+      throw err;
     }
-    throw err;
   } finally {
     await session.endSession();
   }
@@ -119,17 +134,28 @@ export async function recordOutcome(
   ]
     .filter(Boolean)
     .join('\n');
-  const created = await createMemory(
-    orgId,
-    { agentId: String(task.agentId), title, content, type: 'episodic', tags: ['outcome', worked ? 'worked' : 'failed'] },
-    actor,
-    {
-      provenance: { kind: 'outcome', outcomeId: outcomeId!, citedMemoryIds: cited },
-      sourceTaskId: task._id,
-      verification: { status: worked ? 'verified_success' : 'verified_failure', outcomeIds: [outcomeId!], verifiedAt: now },
-    },
-  );
+  let created: MemoryDoc;
+  try {
+    created = await createMemory(
+      orgId,
+      { agentId: String(task.agentId), title, content, type: 'episodic', tags: ['outcome', worked ? 'worked' : 'failed'] },
+      actor,
+      {
+        provenance: { kind: 'outcome', outcomeId: outcomeId!, citedMemoryIds: cited },
+        sourceTaskId: task._id,
+        verification: { status: worked ? 'verified_success' : 'verified_failure', outcomeIds: [outcomeId!], verifiedAt: now },
+      },
+      // Embedding is an external call that can take a while: it runs in the background and the
+      // UI polls /searchable until the memory is retrievable by both indexes.
+      { embed: false },
+    );
+  } catch (err) {
+    // Unique (orgId, provenance.outcomeId): a concurrent retry already created it.
+    if (!(err instanceof MongoServerError && err.code === 11000)) throw err;
+    created = (await memoriesRepo.find(orgId, { 'provenance.outcomeId': outcomeId! }, { limit: 1 }))[0]!;
+  }
   await outcomesRepo.updateById(orgId, outcomeId!, { $set: { createdMemoryId: created._id } });
+  void embedMemory(orgId, created).catch(() => {});
 
   // 5. Events.
   await logEvent(orgId, {

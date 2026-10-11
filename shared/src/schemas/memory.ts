@@ -63,7 +63,7 @@ export type UpdateMemoryInput = z.infer<typeof UpdateMemorySchema>;
 export const MemorySortSchema = z.enum(['newest', 'oldest', 'usefulness', 'retrievals']);
 
 export const MemoryListQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   agentId: IdSchema.optional(),
   type: MemoryTypeSchema.optional(),

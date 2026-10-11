@@ -116,6 +116,7 @@ export const ResultRow = React.forwardRef<HTMLDivElement, ResultRowProps>(functi
       <button
         type="button"
         onClick={onSelect}
+        aria-pressed={selected ? true : false}
         className="focus-ring -m-1 flex min-w-0 flex-1 flex-col gap-1 rounded-control p-1 text-left"
       >
         <div className="flex min-w-0 items-center gap-1.5">

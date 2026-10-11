@@ -79,42 +79,59 @@ async function rawRequest<T>(method: string, path: string, body: unknown, auth: 
   return json as T;
 }
 
-/** Authenticated request; signs in with demo auth once on 401 and retries. */
-export async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+/** Runs `attempt` with the current token; on 401 signs in again once and retries. */
+async function withAuth<T>(attempt: () => Promise<T>): Promise<T> {
   if (!memToken) await demoLogin();
+  const used = memToken;
   try {
-    return await rawRequest<T>(method, path, body, true, signal);
+    return await attempt();
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      writeToken(null);
-      await demoLogin();
-      return rawRequest<T>(method, path, body, true, signal);
+      // Only discard the token this request used: a concurrent request may already hold a fresh one.
+      if (memToken === used) {
+        writeToken(null);
+        await demoLogin();
+      }
+      return attempt();
     }
     throw err;
   }
 }
 
-/** Binary request (e.g. audio). */
-export async function requestBlob(path: string, body: unknown): Promise<Blob> {
-  if (!memToken) await demoLogin();
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${memToken ?? ''}` },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let message = `Request failed with status ${res.status}`;
-    let code = `HTTP_${res.status}`;
+/** Authenticated request; signs in with demo auth once on 401 and retries. */
+export function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  return withAuth(() => rawRequest<T>(method, path, body, true, signal));
+}
+
+/** Binary request (e.g. audio), with the same auth and error handling as JSON requests. */
+export function requestBlob(path: string, body: unknown, signal?: AbortSignal): Promise<Blob> {
+  return withAuth(async () => {
+    let res: Response;
     try {
-      const j = (await res.json()) as { error?: { code?: string; message?: string } };
-      message = j.error?.message ?? message;
-      code = j.error?.code ?? code;
-    } catch {
-      /* ignore */
+      res = await fetch(`${BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${memToken ?? ''}` },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') throw err;
+      throw new ApiError(0, 'NETWORK', 'Could not reach the API. Is the backend running (npm run dev)?');
     }
-    throw new ApiError(res.status, code, message);
-  }
-  return res.blob();
+    if (!res.ok) {
+      let message = `Request failed with status ${res.status}`;
+      let code = `HTTP_${res.status}`;
+      try {
+        const j = (await res.json()) as { error?: { code?: string; message?: string } };
+        message = j.error?.message ?? message;
+        code = j.error?.code ?? code;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new ApiError(res.status, code, message);
+    }
+    return res.blob();
+  });
 }
 
 export const api = {

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Info, ListChecks, Play, SlidersHorizontal, Sparkles, X } from 'lucide-react';
-import { MEMORY_TYPES, type MemoryType, type SearchFilters, type SearchMode, type SearchResponse, type SearchResponseBase, type SearchResult, type VerificationStatus } from '@agent-recall/shared';
+import { MEMORY_TYPES, type Memory, type MemoryType, type SearchFilters, type SearchMode, type SearchResponse, type SearchResponseBase, type SearchResult, type VerificationStatus } from '@agent-recall/shared';
 import { api, ApiError } from '@/lib/api';
 import { useAgents } from '@/lib/queries';
 import { useMediaQuery } from '@/lib/hooks';
@@ -44,51 +44,63 @@ export default function SearchPlayground() {
   const [animateTrace, setAnimateTrace] = React.useState(false);
   const [layoutVersion, setLayoutVersion] = React.useState(0);
   const [hovered, setHovered] = React.useState<string | null>(null);
-  const [selection, setSelection] = React.useState<{ mode: SearchMode; result: SearchResult } | null>(null);
+  const [selected, setSelected] = React.useState<{ mode: SearchMode; id: string } | null>(null);
   const [checked, setChecked] = React.useState<Set<string>>(new Set());
-  const [answering, setAnswering] = React.useState(false);
+  // Snapshot of the memories an answer is grounded in (unticking rows later must not change it).
+  const [answering, setAnswering] = React.useState<Memory[] | null>(null);
   const [tab, setTab] = React.useState<SearchMode>('hybrid');
   const traceRef = React.useRef<HTMLDivElement>(null);
 
   const body = (p = policy) => ({ query: query.trim(), filters, limit: 10, applyOutcomePolicy: p, ...(forceFallback ? { forceKeywordFallback: true } : {}) });
+  // The request behind what is on screen: a policy toggle re-runs *that* query, not unsubmitted edits.
+  const lastBody = React.useRef<ReturnType<typeof body> | null>(null);
+  // Only the newest response per column is applied (fast toggles must not land out of order).
+  const seq = React.useRef<Record<SearchMode, number>>({ keyword: 0, semantic: 0, hybrid: 0 });
   const errText = (e: unknown) => (e instanceof ApiError ? e.message : 'Request failed.');
 
   const runAll = async () => {
     if (!query.trim()) return;
     setLoading({ keyword: true, semantic: true, hybrid: true });
     setErrors({});
-    setSelection(null);
-    setAnswering(false);
+    setSelected(null);
+    setAnswering(null);
+    const b = body();
+    lastBody.current = b;
+    const mine = (['keyword', 'semantic', 'hybrid'] as const).map((m) => ++seq.current[m])[2]!;
     try {
-      const res = await api.post<SearchResponse>('/api/search/hybrid', body());
+      const res = await api.post<SearchResponse>('/api/search/hybrid', b);
+      if (seq.current.hybrid !== mine) return;
       setColumns({ keyword: res.components?.keyword, semantic: res.components?.semantic, hybrid: res });
       setRunId((n) => n + 1);
       setAnimateTrace(true);
       window.setTimeout(() => setAnimateTrace(false), 1400);
     } catch (e) {
-      setErrors({ keyword: errText(e), semantic: errText(e), hybrid: errText(e) });
+      if (seq.current.hybrid === mine) setErrors({ keyword: errText(e), semantic: errText(e), hybrid: errText(e) });
     } finally {
-      setLoading({});
+      if (seq.current.hybrid === mine) setLoading({});
     }
   };
 
-  const runOne = async (mode: SearchMode, p = policy) => {
-    if (!query.trim()) return;
+  const runOne = async (mode: SearchMode, override?: ReturnType<typeof body>) => {
+    const b = override ?? body();
+    if (!b.query) return;
+    if (!override) lastBody.current = b;
+    const mine = ++seq.current[mode];
     setLoading((l) => ({ ...l, [mode]: true }));
     setErrors((e) => ({ ...e, [mode]: null }));
     try {
-      const res = await api.post<SearchResponse>(`/api/search/${mode}`, body(p));
-      setColumns((c) => ({ ...c, [mode]: res }));
+      const res = await api.post<SearchResponse>(`/api/search/${mode}`, b);
+      if (seq.current[mode] === mine) setColumns((c) => ({ ...c, [mode]: res }));
     } catch (e) {
-      setErrors((x) => ({ ...x, [mode]: errText(e) }));
+      if (seq.current[mode] === mine) setErrors((x) => ({ ...x, [mode]: errText(e) }));
     } finally {
-      setLoading((l) => ({ ...l, [mode]: false }));
+      if (seq.current[mode] === mine) setLoading((l) => ({ ...l, [mode]: false }));
     }
   };
 
   const togglePolicy = (on: boolean) => {
     setPolicy(on);
-    if (columns.hybrid) void runOne('hybrid', on);
+    if (columns.hybrid && lastBody.current) void runOne('hybrid', { ...lastBody.current, applyOutcomePolicy: on });
   };
 
   const onCheck = React.useCallback((id: string, on: boolean) => {
@@ -109,6 +121,16 @@ export default function SearchPlayground() {
     return m;
   }, [columns]);
   const selectedResults = [...checked].map((id) => shown.get(id)).filter((x): x is SearchResult => Boolean(x));
+  const selection = React.useMemo(() => {
+    if (!selected) return null;
+    const result = columns[selected.mode]?.results.find((r) => r.memory.id === selected.id);
+    return result ? { mode: selected.mode, result } : null;
+  }, [selected, columns]);
+  // Stable identity: a new object each render made the trace re-measure on every hover.
+  const engines = React.useMemo(
+    () => ({ keyword: columns.keyword?.engine, semantic: columns.semantic?.engine }),
+    [columns.keyword?.engine, columns.semantic?.engine],
+  );
   const ready = Boolean(columns.hybrid) && !loading.hybrid;
   const activeFilterCount = (filters.agentId ? 1 : 0) + (filters.types?.length ?? 0) + (filters.verification?.length ?? 0);
 
@@ -123,8 +145,8 @@ export default function SearchPlayground() {
       runId={runId}
       hoveredId={hovered}
       onHover={setHovered}
-      selectedId={selection?.result.memory.id ?? null}
-      onSelect={(r) => setSelection({ mode, result: r })}
+      selectedId={selected?.id ?? null}
+      onSelect={(r) => setSelected({ mode, id: r.memory.id })}
       checked={checked}
       onCheck={onCheck}
       showRankChips={!wide}
@@ -160,15 +182,15 @@ export default function SearchPlayground() {
           />
           <div className="flex flex-wrap items-center gap-3">
             <FiltersPopover filters={filters} onChange={setFilters} agents={agents.data ?? []} count={activeFilterCount} />
-            <label className="flex items-center gap-2 text-dense text-text">
-              <Switch checked={policy} onCheckedChange={togglePolicy} aria-label="Outcome policy" />
-              Outcome policy {policy ? 'on' : 'off'}
+            <div className="flex items-center gap-2 text-dense text-text">
+              <Switch id="outcome-policy" checked={policy} onCheckedChange={togglePolicy} />
+              <label htmlFor="outcome-policy">Outcome policy {policy ? 'on' : 'off'}</label>
               <Tooltip content={POLICY_TOOLTIP}>
                 <button type="button" className="focus-ring rounded-full text-text-muted hover:text-text" aria-label="How the outcome policy works">
                   <Info className="size-3.5" aria-hidden />
                 </button>
               </Tooltip>
-            </label>
+            </div>
             {forceFallback && <Badge tone="warning">Fallback demo: keyword index treated as unavailable</Badge>}
             <div className="ml-auto flex items-center gap-2">
               {query !== DEMO_QUERY && (
@@ -194,7 +216,7 @@ export default function SearchPlayground() {
             <RetrievalTrace
               containerRef={traceRef}
               hybrid={columns.hybrid.results}
-              engines={{ keyword: columns.keyword?.engine, semantic: columns.semantic?.engine }}
+              engines={engines}
               hoveredId={hovered}
               animate={animateTrace}
               layoutVersion={layoutVersion}
@@ -231,7 +253,7 @@ export default function SearchPlayground() {
                   Clear
                 </Button>
               )}
-              <Button size="sm" variant="primary" disabled={selectedResults.length === 0} onClick={() => setAnswering(true)}>
+              <Button size="sm" variant="primary" disabled={selectedResults.length === 0} onClick={() => setAnswering(selectedResults.map((r) => r.memory))}>
                 <Sparkles aria-hidden />
                 Use in agent task
               </Button>
@@ -258,15 +280,15 @@ export default function SearchPlayground() {
         </Panel>
       </div>
 
-      {answering && selectedResults.length > 0 && (
+      {answering && answering.length > 0 && (
         <AnswerFlow
-          query={query.trim()}
-          memories={selectedResults.map((r) => r.memory)}
+          query={lastBody.current?.query ?? query.trim()}
+          memories={answering}
           defaultAgentId={agents.data?.find((a) => a.name === 'Engineering Assistant')?.id ?? agents.data?.[0]?.id}
-          onClose={() => setAnswering(false)}
+          onClose={() => setAnswering(null)}
           onHoverMemory={setHovered}
           onSearchAgain={() => {
-            setAnswering(false);
+            setAnswering(null);
             setChecked(new Set());
             void runAll();
           }}

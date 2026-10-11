@@ -94,10 +94,20 @@ The frontend reads only `VITE_API_URL`.
 - **Frontend on Vercel:** set the project root to `frontend/`. `vercel.json` builds the workspace and rewrites routes to `index.html`. Set `VITE_API_URL` to the Render API URL, and set the API's `FRONTEND_URL` to the Vercel URL for CORS.
 - **Atlas:** use the same cluster. Allow Render's outbound IPs under Network Access (see `docs/ATLAS_SETUP.md`).
 
+## Security notes
+
+- The API trusts exactly one proxy hop (Render). Rate limits use the client IP the proxy appends; client-supplied `X-Forwarded-For` entries can't bypass them.
+- Paid providers have process-wide per-minute budgets (LLM 30, TTS 20, embedding calls 240) on top of the per-route limits, because demo auth gives anyone a token.
+- Memory text goes into prompts XML-escaped inside `<memory>` blocks, and the system prompt marks it as data, never instructions.
+- `render.yaml` ships `DEMO_MODE=false`. Set it to `true` only for a live demo: it exposes the worker-crash endpoint to every demo user.
+- Provider error bodies stay in server logs; clients get a status code and a fixed reason.
+
 ## Known limitations
 
 - Demo auth only: one seeded user per org, a JWT with no password.
 - The Atlas cluster tier cannot be read by the driver. Set `ATLAS_TIER` so `setup:indexes` enforces search-index limits.
 - Playbook steps are deterministic (no LLM) so they are idempotent. Q&A answers use the LLM.
 - Without `LLM_API_KEY`, answers are labelled template answers. Without ElevenLabs, audio buttons are disabled with an explanation.
+- Seed records can be edited or archived by any demo user; `npm run demo:reset -w backend` restores them.
+- Dev-only advisories remain in Tailwind CSS 3's file watcher (`braces` / `micromatch`); fixing them needs a Tailwind 4 migration. Production dependencies audit clean.
 - More details are in `PROGRESS.md`.

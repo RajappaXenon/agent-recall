@@ -303,3 +303,118 @@ recovery.e2e.test.ts → ✓ (SIGKILL after 2 checkpoints, resumed by a second w
 **Integrations:** MongoDB Atlas, Atlas Search, Atlas Vector Search, Voyage (Atlas model API key via `https://ai.mongodb.com/v1`), ElevenLabs — each confirmed by live probe and real calls. **Anthropic: not verified** — `LLM_API_KEY` is empty, so answers use the labelled template path (code path for the real model is implemented and typed against SDK 0.133; the test env forces template mode).
 
 **Known limitations:** demo auth only; Atlas tier not readable by the driver (`ATLAS_TIER`); playbook steps deterministic (no LLM); seeded fix procedure is already verified per SPEC §13, so the live demo adds evidence rather than flipping status (the flip is covered by tests); not deployed.
+
+## Post-ship review (2026-10-11)
+
+This was a full review of the backend (security, correctness and performance) and the frontend. Three parallel read-only reviewers did the reading, alongside `npm audit`. Every finding below was checked against the code before fixing. Each fix was verified by tests, live API calls or a browser probe.
+
+### Dependencies
+- **Upgrades:**
+  - `@fastify/jwt` 9 → 10.2.4: critical `fast-jwt` advisories (unsigned-token, algorithm-confusion and cache-confusion bypasses).
+  - `@fastify/swagger-ui` 5 → 6.1.2: high `@fastify/static` path and route-guard bypass.
+  - `react-router-dom` 6 → 7.18.4: open-redirect advisories.
+  - `vitest` 2 → 5: dev only (tinypool, esbuild, vite).
+- `npm audit --omit=dev`: **0 vulnerabilities**.
+- 7 dev-only advisories remain, from Tailwind 3 (`braces`, `micromatch`, `postcss-selector-parser`). Fixing them needs a Tailwind 4 migration of the design system. Not done; documented.
+
+### Security fixes
+| Issue | Fix | Verified |
+|---|---|---|
+| `trustProxy: true` let clients spoof `X-Forwarded-For` and bypass every per-IP rate limit | trust exactly one proxy hop | live: rotating spoofed entries behind a proxy → `200 ×20, 429 ×4` |
+| Anyone with a demo token could drive unbounded LLM, TTS and embedding spend | process-wide per-minute budgets (`lib/cost-guard.ts`); answers return `429 BUDGET_EXCEEDED` | unit test |
+| `<memory>` escaping only handled the exact string `</memory>`. This allowed stored prompt injection and forged `verification="verified_success"` blocks. | XML-escape `& < > "` in titles, content and attributes | unit test with hostile payloads |
+| `render.yaml` shipped `DEMO_MODE=true`, which made the worker-crash endpoint public | default `false`, documented | config |
+| Voyage response text and raw worker errors reached clients and events | clients get a status code and a fixed reason; the provider body is logged server-side, scrubbed; worker errors are scrubbed and made generic | code |
+| `/dev/status` exposed other tenants' task ids | return only ids owned by the caller's org | code |
+| `/api/ready` returned driver detail, including the cluster host, publicly | generic detail in production | code |
+| Unbounded `page` (`1e300` caused a driver error and a 500) | `max(1000)` everywhere | live: `400 VALIDATION_ERROR` |
+| Expensive routes only had the global limit | per-route limits on agent create, memory edit, related, overview, learning and integration refresh | code |
+| A placeholder `JWT_SECRET` was accepted in production | reject `change-me*` and `dev-only*` values and anything under 32 characters | code |
+| No security headers on the SPA | CSP, X-Frame-Options, nosniff, Referrer-Policy and Permissions-Policy in `vercel.json` | config |
+| Unique indexes were created fire-and-forget at startup | awaited before `listen` | code |
+
+Verified unchanged:
+- Tenant isolation holds.
+- `alg=none`, bad-signature, expired and missing tokens all return 401.
+- There are no secrets in git or its history.
+
+### Correctness and reliability fixes
+- **Outcome race:** statuses were read before the transaction, so concurrent "worked" and "failed" outcomes could demote a verified procedure. They are now read inside the transaction, so a write conflict retries with fresh data. Regression test: concurrent outcomes always end `verified_success`.
+- **Outcome partial failure:** memory creation ran after the commit. It could fail, or block for about 84 s on Voyage, and a retry then got 409 forever. Fixes:
+  - A retry now finishes the outcome.
+  - A unique `memory_once_per_outcome` index prevents duplicates.
+  - Embedding moved to the background.
+  - `/searchable` waits for the vector while an embedding is pending.
+  - Regression test added.
+- **Search idempotency race:** find-then-insert could fail a playbook task with a duplicate-key error. It now inserts first on the unique index and reuses the existing log on error 11000. Regression test: concurrent runs produce one log.
+- **Worker:**
+  - The poll loop backs off on transient database errors instead of killing the process.
+  - Transient step errors release the lease for another attempt instead of permanently failing the task.
+  - A `MAX_ATTEMPTS = 5` cap stops poison tasks.
+  - The lease is checked at step start.
+  - The main loop owns shutdown, which removes the SIGTERM-while-idle race.
+  - The test-org exclusion is refreshed every 60 s.
+  - The supervisor registers its signal handlers once.
+- **Embeddings:**
+  - One failed batch used to mark every memory failed; batches now succeed or fail independently.
+  - The backfill no longer loads vectors.
+  - Query-path embedding is 2 attempts × 8 s instead of 3 × 20 s.
+- **Search:**
+  - Tag and date filters were applied after only 20 vector hits; it now over-fetches when post-filtering.
+  - The regex fallback scored an arbitrary 200 documents; it now scores 1000 sorted documents and includes tags.
+  - A transient `listSearchIndexes` error reuses the last known state instead of returning a 500.
+- **Indexes:**
+  - New indexes: `retrieval_logs {orgId, results.memoryId, createdAt}`, `events {orgId, agentId|taskId, createdAt}`, `tasks {orgId, createdAt}`, `memories {orgId, relations.targetMemoryId}`, `outcomes {orgId, agentId, createdAt}`, and a unique seed key.
+  - Agent stats aggregate only the listed agents.
+- **API:** LLM errors now map to 429 (rate limited), 422 (refused), 504 (timeout) and 502 (other).
+- **Insights:**
+  - Activity counts exclude archived memories, consistent with the totals.
+  - The source is reported honestly as `none` when there is no data.
+  - Procedure evidence is fetched by id, not only from the last 50 outcomes.
+
+### Frontend fixes
+- **Explorer search dropped URL filters and closed the drawer** (stale `params` closure). URL updates are now functional. Browser-verified: `?type=episodic&tag=checkout` becomes `…&q=pool+timeout`.
+- **`?q=` was only read on mount.** It now re-runs on change, once per query.
+- **Policy toggle race** (out-of-order responses, unsubmitted text). Each column now has a request sequence number, and toggles re-run the last submitted request. Browser-verified: 5 fast toggles end consistent with the switch.
+- **"Why this result" showed stale numbers after a toggle.** It now derives from the current results.
+- **Listen replayed the previous answer after Regenerate.** The player is now keyed by text.
+- **The Retrieval Trace re-measured on every hover** because its `engines` object was unstable. Now memoised.
+- **The task page could miss the final checkpoint when polling stopped.** It now refetches on completion.
+- **Smaller fixes:**
+  - The tag filter was invisible; it now has a removable chip.
+  - Activity polls only on page 1.
+  - The answer is grounded in a snapshot of the selection.
+  - A `NaN` page number is clamped.
+- **API client:** binary requests now share the auth, 401 and network handling, and a late 401 no longer discards a newer token.
+- **Command palette:** removed the never-provided context (a conditional hook).
+- **Accessibility and markup:**
+  - Table rows use `aria-current` instead of `aria-selected`.
+  - Result selection has `aria-pressed`.
+  - The label no longer wraps two buttons.
+  - The rail's warning icon has a role.
+  - Refresh and play failures are surfaced.
+- **Other:**
+  - The chart tick component no longer remounts on every render.
+  - The screenshot script reports states that never loaded instead of swallowing timeouts.
+
+### Verification (real output)
+```
+npm run typecheck   → no errors
+npm run lint        → clean
+npm test            → backend Test Files 6 passed (6) · Tests 40 passed (40)   (Atlas; +6 new: prompt escaping ×2, budget, outcome race, outcome resume, search idempotency)
+                      frontend Tests 2 passed (2)
+npm run build       → ✓ built
+npm audit --omit=dev → found 0 vulnerabilities
+npm run demo:e2e    → all 6 steps; outcome memory embedding=pending → searchable after 1.2 s (keyword=true, vector=true); rank 1
+live crash demo     → worker-8ccb exit 1 after step 3 → worker-399d resumed at step 4 (3 checkpoints restored) → completed attempt 2
+screenshots         → 46 captured, no "did not appear" warnings (React Router 7)
+```
+
+### Remaining risks
+- **Auth:** demo auth (a shared demo user, with the JWT in localStorage) is not production authentication.
+- **Seed data:** seed records can be edited by any demo user; `demo:reset` restores them.
+- **SIGTERM:** the graceful SIGTERM path was not exercised on this Windows machine, because Node can't deliver SIGTERM to a child process here. The logic was reviewed, and the SIGKILL recovery path is tested.
+- **Stuck QA tasks:** a QA task can stay `running` if the API process dies mid-LLM call, because no worker owns QA tasks.
+- **Seeding:** running `npm run seed` alone (without `demo:reset`) resets seed verification while live outcomes still cite those memories.
+- **Unverified and undeployed:** the Anthropic path is still unverified (no `LLM_API_KEY`), and nothing is deployed.
+- **Dev dependencies:** the Tailwind 3 advisories remain.

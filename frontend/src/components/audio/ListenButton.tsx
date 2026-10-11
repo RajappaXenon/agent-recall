@@ -17,5 +17,5 @@ export function ListenButton({ text, filename, className }: { text: string; file
         : eleven
           ? `Audio unavailable: ${eleven.detail}`
           : 'Checking audio availability…';
-  return <AudioPlayer generate={() => requestBlob('/api/audio/speech', { text: clean(text) })} disabledReason={reason} filename={filename} className={className} />;
+  return <AudioPlayer key={clean(text)} generate={() => requestBlob('/api/audio/speech', { text: clean(text) })} disabledReason={reason} filename={filename} className={className} />;
 }

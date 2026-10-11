@@ -37,7 +37,9 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
             redact: ['req.headers.authorization', 'req.headers.cookie'],
             ...(config.NODE_ENV === 'development' ? { transport: undefined } : {}),
           },
-    trustProxy: true,
+    // Render terminates TLS in one proxy hop; trusting more would let clients spoof X-Forwarded-For
+    // and dodge per-IP rate limits.
+    trustProxy: (_address: string, hop: number) => hop < 1,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);

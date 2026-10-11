@@ -19,7 +19,7 @@ export const EventSchema = z.object({
 export type AppEvent = z.infer<typeof EventSchema>;
 
 export const EventListQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
   type: z.string().max(60).optional(),
   typePrefix: z.string().max(40).optional(),

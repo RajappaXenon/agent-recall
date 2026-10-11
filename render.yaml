@@ -47,7 +47,7 @@ services:
       - key: ELEVENLABS_MODEL_ID
         value: eleven_multilingual_v2
       - key: DEMO_MODE
-        value: "true"
+        value: "false" # "true" exposes POST /api/dev/worker/crash to any demo user; enable only for a live demo
       - key: LEASE_MS
         value: "15000"
       - key: DEMO_STEP_DELAY_MS
@@ -80,7 +80,7 @@ services:
       - key: VOYAGE_BASE_URL
         value: https://api.voyageai.com/v1
       - key: DEMO_MODE
-        value: "true"
+        value: "false" # "true" exposes POST /api/dev/worker/crash to any demo user; enable only for a live demo
       - key: LEASE_MS
         value: "15000"
       - key: DEMO_STEP_DELAY_MS

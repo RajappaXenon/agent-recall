@@ -12,12 +12,15 @@ async function countBy(orgId: ObjectId, repo: typeof memoriesRepo | typeof tasks
 }
 
 export async function withStats(orgId: ObjectId, agents: AgentDoc[]): Promise<AgentWithStats[]> {
+  if (agents.length === 0) return [];
+  // Scope every aggregation to the agents being returned (uses the {orgId, agentId, …} indexes).
+  const agentId = { $in: agents.map((a) => a._id) };
   const [memories, tasks, outcomes, lastEvents] = await Promise.all([
-    countBy(orgId, memoriesRepo, { archived: false }),
-    countBy(orgId, tasksRepo),
-    countBy(orgId, outcomesRepo, { result: 'worked' }),
+    countBy(orgId, memoriesRepo, { agentId, archived: false }),
+    countBy(orgId, tasksRepo, { agentId }),
+    countBy(orgId, outcomesRepo, { agentId, result: 'worked' }),
     eventsRepo.aggregate<{ _id: ObjectId; at: Date }>(orgId, [
-      { $match: { agentId: { $ne: null } } },
+      { $match: { agentId } },
       { $group: { _id: '$agentId', at: { $max: '$createdAt' } } },
     ]),
   ]);

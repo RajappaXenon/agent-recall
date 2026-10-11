@@ -12,21 +12,37 @@ export const REGULAR_INDEXES: Record<string, IndexDescription[]> = {
     { key: { orgId: 1, agentId: 1, createdAt: -1 } },
     { key: { orgId: 1, sourceTaskId: 1 } },
     { key: { orgId: 1, 'verification.status': 1 } },
+    { key: { orgId: 1, 'relations.targetMemoryId': 1 } },
+    // One outcome memory per outcome (makes outcome recording safely retryable).
+    { key: { orgId: 1, 'provenance.outcomeId': 1 }, unique: true, partialFilterExpression: { 'provenance.outcomeId': { $exists: true } }, name: 'memory_once_per_outcome' },
+    { key: { orgId: 1, seedKey: 1 }, unique: true, partialFilterExpression: { seedKey: { $exists: true } }, name: 'memory_seed_key' },
   ],
-  [COLLECTIONS.tasks]: [{ key: { status: 1, leaseExpiresAt: 1 } }, { key: { orgId: 1, agentId: 1, createdAt: -1 } }],
+  [COLLECTIONS.tasks]: [
+    { key: { status: 1, leaseExpiresAt: 1 } },
+    { key: { orgId: 1, agentId: 1, createdAt: -1 } },
+    { key: { orgId: 1, createdAt: -1 } },
+  ],
   [COLLECTIONS.checkpoints]: [
     { key: { taskId: 1, stepIndex: 1 }, unique: true },
     { key: { idempotencyKey: 1 }, unique: true },
   ],
   [COLLECTIONS.stepExecutions]: [{ key: { taskId: 1, stepIndex: 1 } }],
-  [COLLECTIONS.events]: [{ key: { orgId: 1, createdAt: -1 } }, { key: { orgId: 1, type: 1, createdAt: -1 } }],
+  [COLLECTIONS.events]: [
+    { key: { orgId: 1, createdAt: -1 } },
+    { key: { orgId: 1, type: 1, createdAt: -1 } },
+    { key: { orgId: 1, agentId: 1, createdAt: -1 } },
+    { key: { orgId: 1, taskId: 1, createdAt: -1 } },
+  ],
   [COLLECTIONS.retrievalLogs]: [
     { key: { orgId: 1, createdAt: -1 } },
+    // GET /memories/:id/retrievals
+    { key: { orgId: 1, 'results.memoryId': 1, createdAt: -1 } },
     { key: { idempotencyKey: 1 }, unique: true, partialFilterExpression: { idempotencyKey: { $exists: true } }, name: 'retrieval_idempotency' },
   ],
   [COLLECTIONS.outcomes]: [
     { key: { orgId: 1, taskId: 1 } },
     { key: { orgId: 1, createdAt: -1 } },
+    { key: { orgId: 1, agentId: 1, createdAt: -1 } },
     // One outcome per task (prevents double-recording under concurrent submits).
     { key: { taskId: 1, orgId: 1 }, unique: true, name: 'outcome_once_per_task' },
   ],

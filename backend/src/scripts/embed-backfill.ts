@@ -18,7 +18,8 @@ runScript('embed:backfill', async () => {
   let total = { embedded: 0, skipped: 0, failed: 0 };
   for (const orgId of orgIds) {
     const org = await identityRepo.findOrgById(orgId);
-    const all = (await memoriesRepo.find(orgId, {})) as MemoryDoc[];
+    // Vectors themselves aren't needed to decide what is stale.
+    const all = (await memoriesRepo.find(orgId, {}, { projection: { 'embedding.vector': 0 } })) as MemoryDoc[];
     const stale = all.filter(
       (m) =>
         m.embeddingStatus !== 'ready' ||

@@ -31,7 +31,8 @@ const healthRoutes: FastifyPluginAsyncZod = async (app) => {
       if (!ping.ok) {
         return reply.status(503).send({
           status: 'not_ready',
-          mongo: { connected: false, latencyMs: null, checkedAt, database: config.DB_NAME, detail: ping.detail },
+          // Driver detail can include the cluster host; keep it in logs only in production.
+          mongo: { connected: false, latencyMs: null, checkedAt, database: config.DB_NAME, detail: config.NODE_ENV === 'production' ? 'database unreachable' : ping.detail },
         });
       }
       return {

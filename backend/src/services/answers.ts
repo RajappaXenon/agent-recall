@@ -66,11 +66,14 @@ export async function createAnswer(orgId: ObjectId, req: AnswerRequest, actor: A
       ...(result.servedBy ? { servedBy: result.servedBy } : {}),
     };
   } catch (err) {
-    const message = err instanceof LlmError ? err.message : 'Answer generation failed.';
+    const message = err instanceof LlmError || err instanceof AppError ? err.message : 'Answer generation failed.';
     await tasksRepo.updateById(orgId, task._id, {
       $set: { status: 'failed', error: message, steps: [{ name: 'Grounded answer', status: 'failed' }], completedAt: new Date() },
     });
     await logEvent(orgId, { type: 'answer.failed', status: 'error', actor, summary: `Answer failed: ${message}`, agentId: agent._id, taskId: task._id });
-    throw new AppError(502, err instanceof LlmError ? err.code : 'LLM_ERROR', message);
+    if (err instanceof AppError) throw err; // e.g. BUDGET_EXCEEDED (429)
+    const code = err instanceof LlmError ? err.code : 'LLM_ERROR';
+    const status = code === 'LLM_RATE_LIMITED' ? 429 : code === 'LLM_REFUSED' ? 422 : code === 'LLM_TIMEOUT' ? 504 : 502;
+    throw new AppError(status, code, message);
   }
 }

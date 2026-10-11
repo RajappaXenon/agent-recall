@@ -5,22 +5,27 @@
  * it exits with a non-zero code, like systemd/Kubernetes would. Used for the crash
  * demo: the crashed worker's lease must expire before the new one can claim the task.
  */
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const backendDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 let stopping = false;
 let restarts = 0;
+let current: ChildProcess | null = null;
+
+// Registered once (not per restart) and forwarded to whichever worker is running.
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(sig, () => {
+    stopping = true;
+    if (current && current.exitCode === null) current.kill(sig);
+    else process.exit(0);
+  });
+}
 
 function start() {
   const child = spawn(process.execPath, ['--import', 'tsx', 'src/worker.ts'], { cwd: backendDir, stdio: 'inherit', env: process.env });
-  const forward = (sig: NodeJS.Signals) => () => {
-    stopping = true;
-    child.kill(sig);
-  };
-  process.once('SIGINT', forward('SIGINT'));
-  process.once('SIGTERM', forward('SIGTERM'));
+  current = child;
   child.on('exit', (code, signal) => {
     if (stopping || code === 0) process.exit(code ?? 0);
     restarts += 1;

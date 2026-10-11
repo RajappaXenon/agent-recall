@@ -36,8 +36,9 @@ export default function Activity() {
   const [params, setParams] = useSearchParams();
   const typePrefix = params.get('type') ?? undefined;
   const status = params.get('status') ?? undefined;
-  const page = Number(params.get('page') ?? 1);
-  const q = useEvents({ typePrefix, status, page, pageSize: PAGE_SIZE }, true);
+  const page = Math.max(1, Math.floor(Number(params.get('page') ?? 1)) || 1);
+  // Live refresh only on the first page, so rows don't shift under the reader on later pages.
+  const q = useEvents({ typePrefix, status, page, pageSize: PAGE_SIZE }, page === 1);
 
   const set = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(params);

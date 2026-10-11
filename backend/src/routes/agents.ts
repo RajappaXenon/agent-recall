@@ -16,7 +16,7 @@ const agentRoutes: FastifyPluginAsyncZod = async (app) => {
     items: await listAgents(req.auth.orgId),
   }));
 
-  app.post('/agents', { schema: { tags: ['agents'], body: CreateAgentSchema, response: { 201: AgentWithStatsSchema } } }, async (req, reply) => {
+  app.post('/agents', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } }, schema: { tags: ['agents'], body: CreateAgentSchema, response: { 201: AgentWithStatsSchema } } }, async (req, reply) => {
     const agent = await createAgent(req.auth.orgId, req.body, userActor(req.auth.userId));
     return reply.status(201).send(await getAgent(req.auth.orgId, agent._id.toHexString()));
   });
@@ -37,7 +37,7 @@ const agentRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         tags: ['agents'],
         params: Params,
-        querystring: z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }),
+        querystring: z.object({ page: z.coerce.number().int().min(1).max(1000).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }),
         response: { 200: paginated(MemorySchema) },
       },
     },
@@ -59,7 +59,7 @@ const agentRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         tags: ['agents'],
         params: Params,
-        querystring: z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }),
+        querystring: z.object({ page: z.coerce.number().int().min(1).max(1000).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) }),
         response: { 200: paginated(TaskSchema) },
       },
     },

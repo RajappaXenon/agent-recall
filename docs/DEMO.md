@@ -10,6 +10,7 @@ This is a click-by-click walkthrough of the demo story in SPEC §0. Every number
    npm run dev
    npm run worker:supervised -w backend      # second terminal; keep it visible for the crash moment
    ```
+   The crash button needs `DEMO_MODE=true` in `.env` (on a deployed instance it is `false` by default).
 2. Open http://localhost:5173 in a 1440-wide window. Check the header pill: it should show MongoDB, Atlas Search, Atlas Vector Search and Voyage as connected. If a pill is yellow or red, open **Settings & Integrations** and click **Refresh**.
 3. Optional: run the search once off-screen so the first query embedding is cached.
 

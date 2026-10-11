@@ -7,6 +7,7 @@ import { INTEGRATION_STATUS_LABEL, integrationTone, qk, useDevStatus, useIntegra
 import { formatDateTime } from '@/lib/utils';
 import { PageHeader, Panel } from '@/components/ui/panel';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { StatusDot } from '@/components/ui/status-dot';
 import { LatencyChip } from '@/components/ui/latency-chip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,6 +73,8 @@ export default function Settings() {
     setRefreshing(true);
     try {
       qc.setQueryData(qk.integrations, await api.get<IntegrationsResponse>('/api/integrations/status?refresh=true'));
+    } catch {
+      toast.error('Could not refresh integration status.');
     } finally {
       setRefreshing(false);
     }
