@@ -1,0 +1,74 @@
+/*
+ * Agent Recall design tokens (docs/DESIGN.md §2).
+ * Colours are stored as RGB channels so Tailwind can apply opacity
+ * (`bg-accent/10`). Use them via Tailwind classes or `rgb(var(--token))`.
+ * No raw hex values in components.
+ */
+:root {
+  /* Surfaces and text */
+  --bg: 11 13 18; /* #0B0D12 */
+  --sidebar: 16 19 26; /* #10131A */
+  --surface: 21 25 35; /* #151923 */
+  --surface-raised: 27 33 48; /* #1B2130 */
+  --surface-overlay: 31 38 54; /* #1F2636 */
+  --border: 35 42 58; /* #232A3A */
+  --border-strong: 46 54 73; /* #2E3649 */
+  --text: 232 234 240; /* #E8EAF0 */
+  --text-muted: 154 163 181; /* #9AA3B5 */
+  --text-faint: 107 115 133; /* #6B7385 */
+
+  /* Accents and status */
+  --accent: 139 124 255; /* #8B7CFF  primary actions, selection, hybrid */
+  --accent-2: 67 217 195; /* #43D9C3  semantic */
+  --keyword: 107 168 255; /* #6BA8FF  keyword */
+  --success: 63 207 142; /* #3FCF8E */
+  --warning: 245 196 81; /* #F5C451 */
+  --danger: 240 106 106; /* #F06A6A */
+
+  /* Search modes (aliases so mode colour is always consistent) */
+  --mode-keyword: var(--keyword);
+  --mode-semantic: var(--accent-2);
+  --mode-hybrid: var(--accent);
+
+  /* Memory types (always paired with an icon) */
+  --type-semantic: 169 155 255; /* #A99BFF */
+  --type-episodic: 242 144 107; /* #F2906B */
+  --type-taxonomic: 90 184 242; /* #5AB8F2 */
+  --type-procedural: 67 217 195; /* #43D9C3 */
+
+  /* Radius by hierarchy */
+  --radius-control: 6px;
+  --radius-panel: 10px;
+  --radius-overlay: 14px;
+
+  /* Elevation: overlays only */
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.45);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+
+  /* Layout */
+  --sidebar-w: 240px;
+  --sidebar-rail-w: 64px;
+  --header-h: 56px;
+
+  /* shadcn/ui theme variables, derived from the tokens above */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface-overlay);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: 11 13 18;
+  --secondary: var(--surface-raised);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-raised);
+  --muted-foreground: var(--text-muted);
+  --destructive: var(--danger);
+  --destructive-foreground: 11 13 18;
+  --input: var(--border);
+  --ring: var(--accent);
+}
