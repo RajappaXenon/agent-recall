@@ -7,6 +7,8 @@ export interface BaseDoc {
   _id: ObjectId;
   orgId: ObjectId;
   isSeed: boolean;
+  /** Stable key for seed records so `seed` / `demo:reset` can upsert instead of duplicating. */
+  seedKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }

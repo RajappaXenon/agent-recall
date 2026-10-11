@@ -31,7 +31,7 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: [{ group: ['**/db/collections.js'], message: 'Use the orgId-scoped repositories in src/db/repositories.' }] },
+        { patterns: [{ group: ['**/db/collections.js'], allowTypeImports: true, message: 'Use the orgId-scoped repositories in src/db/repositories.' }] },
       ],
     },
   },

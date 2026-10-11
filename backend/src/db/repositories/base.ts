@@ -117,6 +117,28 @@ export class ScopedRepository<T extends BaseDoc> {
     return c.updateMany(this.scope(orgId, filter), withTimestamp, { session });
   }
 
+  /**
+   * Upserts a seed record by (orgId, seedKey). Seed fields are reset to their
+   * seeded values; `preserve` lists fields left untouched on existing docs.
+   */
+  async upsertSeed(orgId: ObjectId, seedKey: string, doc: NewDoc<T>, preserve: string[] = []): Promise<T> {
+    const c = await this.collection();
+    const now = new Date();
+    const { createdAt, ...rest } = doc as NewDoc<T> & { createdAt?: Date };
+    const $set: Record<string, unknown> = { ...rest, isSeed: true, seedKey, updatedAt: now };
+    const $setOnInsert: Record<string, unknown> = { _id: new ObjectId(), orgId: assertOrgId(orgId), createdAt: createdAt ?? now };
+    for (const f of preserve) {
+      if (f in $set) $setOnInsert[f] = $set[f];
+      delete $set[f];
+    }
+    const res = await c.findOneAndUpdate(
+      this.scope(orgId, { seedKey } as Filter<T>),
+      { $set, $setOnInsert } as unknown as UpdateFilter<T>,
+      { upsert: true, returnDocument: 'after' },
+    );
+    return res as T;
+  }
+
   /** Aggregation whose first stage is always the tenant $match. */
   async aggregate<R extends Document = Document>(orgId: ObjectId, pipeline: Document[]): Promise<R[]> {
     const c = await this.collection();

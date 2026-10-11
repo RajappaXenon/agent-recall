@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
-import { Activity, Bot, LayoutDashboard, Library, ScanSearch, Settings, TrendingUp } from 'lucide-react';
+import { Activity, Bot, LayoutDashboard, ScanSearch, Settings, TrendingUp } from 'lucide-react';
 import { AppShell } from './AppShell';
 import { Placeholder } from '@/pages/Placeholder';
 import NotFound from '@/pages/NotFound';
@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Cmd } from '@/components/ui/states';
 
 const DevUi = lazy(() => import('@/pages/DevUi'));
+const MemoryExplorer = lazy(() => import('@/pages/MemoryExplorer'));
 
 const page = (node: ReactNode) => <Suspense fallback={<Skeleton className="h-96 w-full" />}>{node}</Suspense>;
 
@@ -26,12 +27,7 @@ export const router = createBrowserRouter([
           />
         ),
       },
-      {
-        path: '/memories',
-        element: (
-          <Placeholder title="Memory Explorer" description="Browse, filter and edit what your agents remember." icon={Library} message="No memories yet. Create one or load the demo data." />
-        ),
-      },
+      { path: '/memories', element: page(<MemoryExplorer />) },
       {
         path: '/search',
         element: (

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import type { IntegrationsResponse, IntegrationStatus, Session } from '@agent-recall/shared';
-import { api } from './api';
+import type { AgentWithStats, IntegrationsResponse, IntegrationStatus, Memory, Paginated, Session } from '@agent-recall/shared';
+import { api, qs } from './api';
 
 export const qk = {
   session: ['session'] as const,
@@ -43,4 +43,40 @@ export function worstTone(list: IntegrationStatus[]): Severity {
   const tones = list.filter((i) => !i.optional).map(integrationTone);
   for (const t of order) if (tones.includes(t)) return t;
   return 'success';
+}
+
+// ── Agents & memories ───────────────────────────────────────────────────────
+
+export const agentKeys = { all: ['agents'] as const, one: (id: string) => ['agents', id] as const };
+export const memoryKeys = {
+  all: ['memories'] as const,
+  list: (p: Record<string, unknown>) => ['memories', 'list', p] as const,
+  one: (id: string) => ['memories', id] as const,
+};
+
+export function useAgents() {
+  return useQuery({ queryKey: agentKeys.all, queryFn: () => api.get<{ items: AgentWithStats[] }>('/api/agents').then((r) => r.items) });
+}
+
+export interface MemoryListParams {
+  page: number;
+  pageSize: number;
+  agentId?: string;
+  type?: string;
+  verification?: string;
+  tag?: string;
+  sort: string;
+  includeArchived?: boolean;
+}
+
+export function useMemories(p: MemoryListParams) {
+  return useQuery({
+    queryKey: memoryKeys.list(p as unknown as Record<string, unknown>),
+    queryFn: () => api.get<Paginated<Memory>>(`/api/memories${qs({ ...p, includeArchived: p.includeArchived ? 'true' : undefined })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useMemory(id: string | null) {
+  return useQuery({ queryKey: memoryKeys.one(id ?? ''), queryFn: () => api.get<Memory>(`/api/memories/${id}`), enabled: Boolean(id) });
 }

@@ -15,6 +15,9 @@ import errorsPlugin from './plugins/errors.js';
 import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
 import integrationRoutes from './routes/integrations.js';
+import agentRoutes from './routes/agents.js';
+import memoryRoutes from './routes/memories.js';
+import './services/embeddings.js';
 
 export async function buildApp(opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({
@@ -54,6 +57,8 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
       await api.register(healthRoutes);
       await api.register(authRoutes);
       await api.register(integrationRoutes);
+      await api.register(agentRoutes);
+      await api.register(memoryRoutes);
     },
     { prefix: '/api' },
   );

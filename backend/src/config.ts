@@ -25,6 +25,8 @@ const EnvSchema = z.object({
   MONGODB_URI: optionalString,
   DB_NAME: z.preprocess(emptyToUndefined, z.string().default('agent_recall')),
   TEST_DB_NAME: optionalString,
+  // Optional comma-separated DNS servers for mongodb+srv lookups when Node's resolver is broken (e.g. loopback-only on Windows).
+  DNS_SERVERS: optionalString,
   FRONTEND_URL: z.preprocess(emptyToUndefined, z.string().default('http://localhost:5173')),
   JWT_SECRET: z.preprocess(emptyToUndefined, z.string().min(16).default('dev-only-insecure-secret-change-me')),
   AUTH_MODE: z.literal('demo').default('demo'),
@@ -32,6 +34,8 @@ const EnvSchema = z.object({
   VOYAGE_API_KEY: optionalString,
   VOYAGE_MODEL: z.preprocess(emptyToUndefined, z.string().default('voyage-3.5')),
   VOYAGE_DIMENSIONS: z.preprocess(emptyToUndefined, z.coerce.number().int().default(1024)),
+  // https://api.voyageai.com/v1 for keys from voyageai.com; https://ai.mongodb.com/v1 for Atlas "model API keys".
+  VOYAGE_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().default('https://api.voyageai.com/v1')),
 
   LLM_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['anthropic']).default('anthropic')),
   LLM_API_KEY: optionalString,
