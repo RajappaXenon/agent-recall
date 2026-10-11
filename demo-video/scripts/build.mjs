@@ -165,12 +165,19 @@ const delays = placements
   .map((p, i) => `[${i}:a]atrim=start=${p.from.toFixed(3)}:duration=${p.d.toFixed(3)},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,adelay=${Math.round(p.at * 1000)}|${Math.round(p.at * 1000)}[n${i}]`)
   .join(';');
 const narrMix = `${placements.map((_, i) => `[n${i}]`).join('')}amix=inputs=${placements.length}:normalize=0:duration=longest,apad=whole_dur=${TOTAL},atrim=0:${TOTAL}[voice]`;
-// Am – F – C – G pad (8 s per chord), soft sines with a slow swell; generated, no third-party audio.
-const chord = (f) => f.map((hz, i) => `${(0.05 - i * 0.008).toFixed(3)}*sin(2*PI*${hz}*t)`).join('+');
-const prog = [[110.0, 164.81, 220.0, 261.63], [87.31, 130.81, 174.61, 220.0], [130.81, 196.0, 261.63, 329.63], [98.0, 146.83, 196.0, 246.94]];
-const expr = prog.map((c, i) => `between(mod(t,32),${i * 8},${i * 8 + 8})*(${chord(c)})`).join('+');
-const music = `aevalsrc='(${expr})*(0.75+0.25*sin(2*PI*0.125*t))':s=48000:d=${TOTAL},aformat=channel_layouts=stereo,lowpass=f=1800,volume=0.3,afade=t=in:d=2.5,afade=t=out:st=${TOTAL - 3}:d=3[pad]`;
-const mix = `${delays};${narrMix};[voice]asplit=2[v1][key];${music};[pad][key]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=400[duck];[v1][duck]amix=inputs=2:normalize=0:duration=first,atrim=0:${TOTAL}[aout]`;
+// Am – F – C – G pad (8 s per chord), soft sines; generated, no third-party audio.
+// Kept above ~200 Hz (low sines buzz on laptop speakers) and crossfaded with raised-cosine
+// envelopes that sum to 1, so chord changes have no hard edges.
+const chord = (f) => f.map((hz, i) => `${(0.05 - i * 0.01).toFixed(3)}*sin(2*PI*${hz}*t)`).join('+');
+const prog = [[220.0, 261.63, 329.63, 440.0], [220.0, 261.63, 349.23, 440.0], [261.63, 329.63, 392.0, 523.25], [246.94, 293.66, 392.0, 493.88]];
+const env = (i) => {
+  const x = `(mod(t-${i * 8 + 4}+16,32)-16)`;
+  return `lt(abs(${x}),8)*pow(cos(PI*${x}/16),2)`;
+};
+const expr = prog.map((c, i) => `${env(i)}*(${chord(c)})`).join('+');
+const music = `aevalsrc='${expr}':s=48000:d=${TOTAL},aformat=channel_layouts=stereo,highpass=f=180,lowpass=f=1600,volume=0.22,afade=t=in:d=2.5,afade=t=out:st=${TOTAL - 3}:d=3[pad]`;
+// Gentle, slow ducking: fast gain changes on a sustained tone are heard as a flutter.
+const mix = `${delays};${narrMix};[voice]asplit=2[v1][key];${music};[pad][key]sidechaincompress=threshold=0.03:ratio=2.5:attack=250:release=1500:knee=6[duck];[v1][duck]amix=inputs=2:normalize=0:duration=first,atrim=0:${TOTAL}[aout]`;
 ff([...narrInputs, '-filter_complex', mix, '-map', '[aout]', '-c:a', 'pcm_s16le', '-ar', '48000', resolve(work, 'audio-raw.wav')]);
 // Static gain to -16 LUFS (dynamic loudnorm would pump the music-only title up to speech level).
 // ffmpeg prints the meter summary on stderr.
