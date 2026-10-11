@@ -452,3 +452,39 @@ screenshots         → 46 captured, no "did not appear" warnings (React Router 
   - console errors during recording: 0.
 - FFmpeg came from the `ffmpeg-static` and `ffprobe-static` npm packages, installed outside the repo. Demo data was reset after recording.
 - Not changed (no app changes for the video): an outcome-created memory shows raw `**` Markdown in its Content tab.
+
+## Retrieval benchmark + MCP server (2026-10-11)
+
+**Benchmark**
+- `backend/src/eval/benchmark-set.ts` has 24 labelled questions over the seed (6 "what fixed it", 11 paraphrased, 7 exact identifiers). The labelling rule is written in the file; labels were set before the first run.
+- `src/eval/metrics.ts` computes Hit@1, MRR@10, Recall@5, graded nDCG@5 and p50/p95 latency.
+- `services/benchmark.ts` uses the new side-effect-free `runSearch()` (no retrieval logs or counts). Runs are stored in a new `benchmark_runs` collection (org-scoped repository, `{orgId, createdAt}` index; `demo:reset` and the test cleanup include it).
+- API: `GET /api/benchmarks/set`, `POST /api/benchmarks/runs` (4 per 10 min), `GET /api/benchmarks/runs[/:id]`. CLI: `npm run benchmark -w backend`.
+- Benchmarks page (`/benchmarks`):
+  - results table with a question-type filter;
+  - nDCG@5 chart with a table view;
+  - "Effect of outcome signals" list;
+  - run history;
+  - per-question first-answer ranks with expandable top 5;
+  - a dialog listing the labelled questions.
+- Screenshots: 1440 and 390 px checked; mobile horizontal overflow fixed (390 = 390); 0 console errors.
+- **Finding:** the outcome policy (×1.15) is larger than adjacent RRF gaps (about 1.6%). On the first run it moved the first direct answer up on 3 questions and down on 12. Overall hybrid nDCG@5 was 0.852 without outcome signals and 0.702 with them. `docs/RANKING.md` claimed the policy could "never lift an irrelevant memory over a relevant one"; that claim is corrected. The ranking itself is not changed: that is a separate decision.
+
+**MCP server**
+- `mcp/` workspace uses `@modelcontextprotocol/sdk` 1.32.1 (`McpServer.registerTool`, stdio).
+- Tools: `recall`, `get_memory`, `ask`, `record_outcome`, `remember`, `check_searchable`.
+- It calls the REST API only (no direct DB access) and returns memory text XML-escaped in `<memory>` blocks marked as reference data.
+- Project `.mcp.json` registers it for Claude Code.
+- `npm run smoke -w mcp` ran live:
+  1. recall returned 3 memories;
+  2. ask answered via Groq gpt-oss-120b in 1.5 s, citing 2 memories;
+  3. record_outcome created a verified memory;
+  4. check_searchable reported it searchable after 2.0 s;
+  5. recall returned the new memory at rank 1.
+- Demo data was reset afterwards.
+
+**Checks**
+- `npm run lint`: clean. This also fixed the earlier lint errors in `demo-video/scripts` (browser globals, an unused binding).
+- `npm run typecheck`: clean, including `mcp`.
+- `npm test`: backend 53/53 (adds 7 benchmark tests), frontend 2/2.
+- `npm run build`: builds every workspace, including `mcp/dist`.

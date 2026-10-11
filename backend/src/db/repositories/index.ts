@@ -1,6 +1,7 @@
 import { rawCollections } from '../collections.js';
 import type {
   AgentDoc,
+  BenchmarkRunDoc,
   CheckpointDoc,
   EventDoc,
   MemoryDoc,
@@ -23,5 +24,6 @@ export const stepExecutionsRepo = new ScopedRepository<StepExecutionDoc>(
 );
 export const outcomesRepo = new ScopedRepository<OutcomeDoc>(async () => (await rawCollections()).outcomes);
 export const retrievalLogsRepo = new ScopedRepository<RetrievalLogDoc>(async () => (await rawCollections()).retrievalLogs);
+export const benchmarkRunsRepo = new ScopedRepository<BenchmarkRunDoc>(async () => (await rawCollections()).benchmarkRuns);
 export const eventsRepo = new ScopedRepository<EventDoc>(async () => (await rawCollections()).events);
 export { atlasKeywordSearch, atlasVectorSearch, regexFallbackSearch, memoryWithVector, type SearchHit } from './memory-search.js';

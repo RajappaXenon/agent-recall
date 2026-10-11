@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agent-recall": {
+      "command": "node",
+      "args": ["--import", "tsx", "mcp/src/index.ts"],
+      "env": {
+        "AGENT_RECALL_API_URL": "http://localhost:4000",
+        "AGENT_RECALL_AGENT": "Engineering Assistant"
+      }
+    }
+  }
+}

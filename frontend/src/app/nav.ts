@@ -1,4 +1,4 @@
-import { Activity, Bot, LayoutDashboard, Library, ScanSearch, Settings, TrendingUp, type LucideIcon } from 'lucide-react';
+import { Activity, Bot, FlaskConical, LayoutDashboard, Library, ScanSearch, Settings, TrendingUp, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   to: string;
@@ -14,6 +14,7 @@ export const NAV_MAIN: NavItem[] = [
   { to: '/search', label: 'Search Playground', icon: ScanSearch, crumb: 'Search Playground' },
   { to: '/agents', label: 'Agents', icon: Bot, crumb: 'Agents' },
   { to: '/learning', label: 'Learning & Insights', icon: TrendingUp, crumb: 'Learning & Insights' },
+  { to: '/benchmarks', label: 'Benchmarks', icon: FlaskConical, crumb: 'Benchmarks' },
   { to: '/activity', label: 'Activity Log', icon: Activity, crumb: 'Activity Log' },
 ];
 

@@ -16,7 +16,8 @@
     "embed:backfill": "tsx src/scripts/embed-backfill.ts",
     "demo:reset": "tsx src/scripts/demo-reset.ts",
     "demo:e2e": "tsx src/scripts/demo-e2e.ts",
-    "worker:supervised": "tsx src/scripts/worker-supervised.ts"
+    "worker:supervised": "tsx src/scripts/worker-supervised.ts",
+    "benchmark": "tsx src/scripts/benchmark.ts"
   },
   "dependencies": {
     "@agent-recall/shared": "0.1.0",

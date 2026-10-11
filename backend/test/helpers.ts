@@ -4,6 +4,7 @@ import { ensureRegularIndexes } from '../src/db/indexes.js';
 import {
   agentsRepo,
   checkpointsRepo,
+  benchmarkRunsRepo,
   eventsRepo,
   identityRepo,
   memoriesRepo,
@@ -38,7 +39,7 @@ export async function testOrgs(): Promise<{ a: ObjectId; b: ObjectId; userA: Obj
 /** Removes every document owned by the test orgs. Never touches other orgs. */
 export async function cleanTestOrgs(...orgIds: ObjectId[]) {
   for (const orgId of orgIds) {
-    for (const repo of [memoriesRepo, agentsRepo, tasksRepo, checkpointsRepo, stepExecutionsRepo, outcomesRepo, retrievalLogsRepo, eventsRepo]) {
+    for (const repo of [memoriesRepo, agentsRepo, tasksRepo, checkpointsRepo, stepExecutionsRepo, outcomesRepo, retrievalLogsRepo, eventsRepo, benchmarkRunsRepo]) {
       await (repo as typeof memoriesRepo).deleteMany(orgId, {});
     }
   }

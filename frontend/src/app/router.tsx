@@ -11,6 +11,7 @@ const Agents = lazy(() => import('@/pages/Agents'));
 const TaskDetail = lazy(() => import('@/pages/TaskDetail'));
 const Overview = lazy(() => import('@/pages/Overview'));
 const Learning = lazy(() => import('@/pages/Learning'));
+const Benchmarks = lazy(() => import('@/pages/Benchmarks'));
 const Activity = lazy(() => import('@/pages/Activity'));
 const Settings = lazy(() => import('@/pages/Settings'));
 
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: '/agents', element: page(<Agents />) },
       { path: '/tasks/:id', element: page(<TaskDetail />), handle: { crumb: 'Task' } },
       { path: '/learning', element: page(<Learning />) },
+      { path: '/benchmarks', element: page(<Benchmarks />) },
       { path: '/activity', element: page(<Activity />) },
       { path: '/settings', element: page(<Settings />) },
       { path: '/dev/ui', element: page(<DevUi />), handle: { crumb: 'Design system' } },

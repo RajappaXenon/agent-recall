@@ -18,6 +18,8 @@ Built for the MongoDB "Harness Engineering & Model Wrangling" hackathon.
 | **Search Playground** | One query through keyword, semantic and hybrid retrieval side by side. The Retrieval Trace draws how each memory's keyword and semantic ranks fuse into its hybrid rank. Every result explains why it came back. |
 | **Grounded answers** | Answers are grounded in selected memories, which go into the prompt as untrusted `<memory>` blocks, and the answer cites them. The model is Claude (`claude-opus-5-5`) or Groq (`openai/gpt-oss-120b`), with Groq as the automatic fallback. Without any LLM key, the answer is a clearly labelled template answer. |
 | **Learning loop** | "Did this work?" records an outcome. A successful outcome verifies the cited procedure, the outcome becomes a new episodic memory, and the outcome policy `final = rrf × (1 + 0.15·s)` ranks verified procedures higher. No model weights change. |
+| **Retrieval benchmark** | 24 hand-labelled questions (paraphrased problems, exact identifiers, "what fixed this before?") run through the real search pipeline. It reports Hit@1, MRR@10, Recall@5, graded nDCG@5 and latency for keyword, semantic, hybrid, and hybrid with outcome signals, on the Benchmarks page and via `npm run benchmark -w backend`. |
+| **MCP server** | `mcp/` exposes the memory to any MCP client (Claude Code, Claude Desktop, other agents): `recall`, `get_memory`, `ask`, `record_outcome`, `remember`, `check_searchable`. An agent can recall a past fix, get a cited recommendation and record whether it worked, all without opening the UI. |
 | **Crash-safe tasks** | The worker claims tasks with a lease and commits a checkpoint and the step advance in one transaction. If the worker is killed mid-run, another worker resumes from the last checkpoint. |
 | **Honest UI** | Every number is computed from stored data. Engine pills and fallback warnings are always shown, seeded records carry a "Demo data" badge, and integrations are "connected" only after a live probe. |
 
@@ -31,6 +33,7 @@ backend API (Fastify 5, Zod, Swagger at /docs) ──► MongoDB Atlas  (memorie
    │                                                  tasks, checkpoints, outcomes, retrieval_logs, events …)
    ├─► Voyage AI (embeddings)    ├─► Anthropic (answers)    └─► ElevenLabs (optional audio)
 backend worker (separate process) ──► MongoDB Atlas (lease claim, heartbeat, transactional checkpoints)
+MCP server (mcp/, stdio) ──► backend API  (same auth, org scoping, rate limits and activity log)
 ```
 
 ```
@@ -41,8 +44,10 @@ backend/   src/server.ts  src/worker.ts  src/config.ts
            src/routes/    one Fastify plugin per domain
            src/scripts/   setup-indexes, seed, embed-backfill, demo-reset, demo-e2e, worker-supervised
            test/          unit, RRF, search/outcome integration, recovery e2e (real worker processes)
+           src/eval/      labelled benchmark set and IR metrics
 frontend/  src/app (shell, router)  src/pages  src/components  src/lib
            scripts/screenshots.mjs (Playwright design QA)
+mcp/       src/index.ts (MCP server)  src/smoke.ts (end-to-end check through a real MCP client)
 docs/      SPEC.md  DESIGN.md  RANKING.md  DEMO.md  ATLAS_SETUP.md
 ```
 
@@ -73,8 +78,43 @@ Open http://localhost:5173. Demo auth signs you in automatically. It is **not pr
 | `npm run embed:backfill -w backend` | Embeds memories that are missing or have a stale embedding |
 | `npm run demo:reset -w backend` | Deletes non-seed data in the demo org only, then re-seeds |
 | `npm run demo:e2e -w backend` | Runs demo steps 1–6 through the API and prints the real results |
+| `npm run benchmark -w backend` | Runs the labelled retrieval benchmark on the demo org, stores the run and prints the metrics table |
+| `npm run smoke -w mcp` | Starts the MCP server over stdio and runs recall → ask → record_outcome → check_searchable through a real MCP client |
 | `npm run screenshots -w frontend` | Playwright screenshots of every route and state at 1440, 1024 and 390 px |
 | `npm run typecheck && npm run lint && npm test && npm run build` | The full check |
+
+## Use it from Claude Code (MCP)
+
+The repo ships a project-scoped `.mcp.json`. With `npm run dev` running, start Claude Code in the repo root, approve the `agent-recall` server, then ask something like *"Orders API keeps hitting 504s after we shrank the DB pool. Check Agent Recall for how we fixed it before."*
+
+To add it to another MCP client, run the server with Node:
+
+```json
+{ "mcpServers": { "agent-recall": {
+    "command": "node", "args": ["--import", "tsx", "<repo>/mcp/src/index.ts"],
+    "env": { "AGENT_RECALL_API_URL": "http://localhost:4000", "AGENT_RECALL_AGENT": "Engineering Assistant" } } } }
+```
+
+- **`AGENT_RECALL_TOKEN`:** optional. Without it the server signs in with demo auth, which works only when the API runs with `AUTH_MODE=demo`.
+- **Data handling:** the server calls the REST API only and never connects to MongoDB itself. It returns memory text inside escaped `<memory>` blocks, marked as reference data, not instructions.
+
+## Retrieval benchmark
+
+The labels are in `backend/src/eval/benchmark-set.ts`, together with the labelling rule.
+- **Labelling:** each question's grades were written from what the question asks, before the first run, and were not tuned afterwards.
+- **Isolation:** runs call the search code with no side effects (no retrieval logs, no retrieval counts), one query at a time.
+- **Scoring:** memories created after seeding have no labels, so they are left out of scoring, and the run reports how many were left out.
+
+Run of Oct 11, 2026 (24 questions, demo seed):
+
+| | Hit@1 | MRR@10 | Recall@5 | nDCG@5 |
+|---|---|---|---|---|
+| Keyword (Atlas Search) | 62.5% | 0.727 | 72.7% | 0.738 |
+| Semantic (Vector Search) | 83.3% | 0.906 | 87.0% | 0.919 |
+| Hybrid RRF | 75.0% | 0.844 | 83.4% | 0.852 |
+| Hybrid RRF + outcome policy | 41.7% | 0.644 | 82.0% | 0.702 |
+
+The benchmark found a real problem: the ×1.15 outcome boost is larger than the gap between adjacent RRF scores (about 1.6%). It lifts verified procedures above the right answer for unrelated questions; see `docs/RANKING.md`. Re-run it after any ranking change; the Benchmarks page keeps the run history.
 
 ## Environment
 

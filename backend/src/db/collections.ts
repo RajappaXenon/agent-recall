@@ -134,6 +134,34 @@ export interface EventDoc extends BaseDoc {
   details: Record<string, unknown>;
 }
 
+export type BenchmarkConfig = 'keyword' | 'semantic' | 'hybrid' | 'hybrid_policy';
+export interface BenchmarkMetrics {
+  hitAt1: number;
+  mrrAt10: number;
+  recallAt5: number;
+  ndcgAt5: number;
+}
+
+export interface BenchmarkRunDoc extends BaseDoc {
+  version: string;
+  userId: ObjectId | null;
+  durationMs: number;
+  corpus: { seedMemories: number; nonSeedMemories: number; missingSeedKeys: string[] };
+  engines: Record<'keyword' | 'semantic', string>;
+  warnings: string[];
+  overall: Record<BenchmarkConfig, BenchmarkMetrics>;
+  byCategory: Record<string, { queries: number; metrics: Record<BenchmarkConfig, BenchmarkMetrics> }>;
+  latencyMs: Record<'keyword' | 'semantic' | 'hybrid', { p50: number; p95: number }>;
+  queries: {
+    id: string;
+    category: string;
+    query: string;
+    relevantCount: number;
+    excludedNonSeedHits: number;
+    perConfig: Record<BenchmarkConfig, { metrics: BenchmarkMetrics; firstAnswerRank: number | null; top: { key: string; title: string | null; grade: number }[] }>;
+  }[];
+}
+
 export const COLLECTIONS = {
   organizations: 'organizations',
   users: 'users',
@@ -145,6 +173,7 @@ export const COLLECTIONS = {
   outcomes: 'outcomes',
   retrievalLogs: 'retrieval_logs',
   events: 'events',
+  benchmarkRuns: 'benchmark_runs',
 } as const;
 
 /**
@@ -164,6 +193,7 @@ export async function rawCollections() {
     outcomes: db.collection<OutcomeDoc>(COLLECTIONS.outcomes),
     retrievalLogs: db.collection<RetrievalLogDoc>(COLLECTIONS.retrievalLogs),
     events: db.collection<EventDoc>(COLLECTIONS.events),
+    benchmarkRuns: db.collection<BenchmarkRunDoc>(COLLECTIONS.benchmarkRuns),
   };
 }
 export type RawCollections = Awaited<ReturnType<typeof rawCollections>>;

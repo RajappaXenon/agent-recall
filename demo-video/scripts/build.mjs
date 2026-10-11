@@ -201,5 +201,5 @@ ff([
   '-t', String(TOTAL), '-movflags', '+faststart',
   resolve(root, 'agent-recall-demo.mp4'),
 ]);
-writeFileSync(resolve(root, 'build/placements.json'), JSON.stringify({ placements: placements.map(({ file, sceneEnd, ...p }) => p), cues: cues.length }, null, 2));
+writeFileSync(resolve(root, 'build/placements.json'), JSON.stringify({ placements: placements.map((p) => ({ id: p.id, from: p.from, d: p.d, at: p.at, text: p.text })), cues: cues.length }, null, 2));
 console.log('built demo-video/agent-recall-demo.mp4');

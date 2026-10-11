@@ -7,6 +7,7 @@ import {
   agentsRepo,
   checkpointsRepo,
   DEMO_ORG_SLUG,
+  benchmarkRunsRepo,
   eventsRepo,
   identityRepo,
   memoriesRepo,
@@ -22,7 +23,7 @@ runScript('demo:reset', async () => {
   const org = await identityRepo.findOrgBySlug(DEMO_ORG_SLUG);
   if (org) {
     const nonSeed = { isSeed: { $ne: true } };
-    const repos = { memories: memoriesRepo, tasks: tasksRepo, checkpoints: checkpointsRepo, step_executions: stepExecutionsRepo, outcomes: outcomesRepo, retrieval_logs: retrievalLogsRepo, events: eventsRepo, agents: agentsRepo };
+    const repos = { memories: memoriesRepo, tasks: tasksRepo, checkpoints: checkpointsRepo, step_executions: stepExecutionsRepo, outcomes: outcomesRepo, retrieval_logs: retrievalLogsRepo, events: eventsRepo, benchmark_runs: benchmarkRunsRepo, agents: agentsRepo };
     for (const [name, repo] of Object.entries(repos)) {
       const n = await (repo as typeof memoriesRepo).deleteMany(org._id, nonSeed as never);
       console.log(`  ${name}: deleted ${n} non-seed document(s)`);

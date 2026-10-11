@@ -16,8 +16,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['backend/**/*.ts', 'shared/**/*.ts', '**/*.mjs', '*.js'],
+    files: ['backend/**/*.ts', 'shared/**/*.ts', 'mcp/**/*.ts', '**/*.mjs', '*.js'],
     languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // Playwright recording scripts: Node, plus browser code passed to page.evaluate / addInitScript.
+    files: ['demo-video/scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
     files: ['frontend/**/*.{ts,tsx}'],

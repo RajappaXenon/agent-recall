@@ -40,7 +40,7 @@ s =  0  otherwise
 - A procedure that once worked is not flipped to `verified_failure` by a later failure; the failure is recorded in `outcomeIds` instead.
 - The response returns `rrf`, `policyMultiplier`, `final` and `rankBeforePolicy`, so the effect is always visible.
 - `applyOutcomePolicy` (default `true`) can be switched off in the Playground to compare the two orderings.
-- 0.15 is a deliberately small weight: at most about one or two positions for adjacent results, never enough to lift an irrelevant memory over a relevant one.
+- 0.15 was chosen as a small weight, but the retrieval benchmark (`npm run benchmark -w backend`, Benchmarks page) measured that it is **not** small relative to RRF: adjacent ranks differ by only about 1.6% in RRF score, so a ×1.15 boost can lift a verified memory above the correct answer for an unrelated question. On the seed benchmark (run 2026-10-11) the policy moved the first direct answer up on 3 "what fixed this" queries and down on 12 others; see the Benchmarks page for the current numbers.
 
 "Learning" here means updating persisted memories and these ranking signals. No model weights change.
 

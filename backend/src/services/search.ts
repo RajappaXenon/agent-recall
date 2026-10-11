@@ -397,18 +397,22 @@ async function hybrid(orgId: ObjectId, o: SearchOptions): Promise<SearchResponse
   };
 }
 
-/** Runs a search, writes a retrieval log + event, increments retrievalCount on returned memories. */
-export async function search(orgId: ObjectId, mode: SearchMode, o: SearchOptions, actor: Actor, userId: ObjectId | null): Promise<SearchResponse> {
-  let res: SearchResponse;
+/** Runs a search with no side effects: no retrieval log, no event, no retrievalCount change (benchmarks). */
+export async function runSearch(orgId: ObjectId, mode: SearchMode, o: SearchOptions): Promise<SearchResponse> {
   if (mode === 'keyword') {
     const run = await runKeyword(orgId, o, o.limit);
-    res = base(run, keywordResults(run, o.query), o.applyOutcomePolicy);
-  } else if (mode === 'semantic') {
-    const run = await runSemantic(orgId, o, o.limit);
-    res = base(run, semanticResults(run, o.query), o.applyOutcomePolicy);
-  } else {
-    res = await hybrid(orgId, o);
+    return base(run, keywordResults(run, o.query), o.applyOutcomePolicy);
   }
+  if (mode === 'semantic') {
+    const run = await runSemantic(orgId, o, o.limit);
+    return base(run, semanticResults(run, o.query), o.applyOutcomePolicy);
+  }
+  return hybrid(orgId, o);
+}
+
+/** Runs a search, writes a retrieval log + event, increments retrievalCount on returned memories. */
+export async function search(orgId: ObjectId, mode: SearchMode, o: SearchOptions, actor: Actor, userId: ObjectId | null): Promise<SearchResponse> {
+  const res = await runSearch(orgId, mode, o);
 
   // A worker step that reruns after a crash passes its idempotency key. Insert first: the unique
   // `retrieval_idempotency` index makes this atomic, so two workers on the same step can't both

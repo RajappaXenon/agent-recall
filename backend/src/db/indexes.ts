@@ -39,6 +39,7 @@ export const REGULAR_INDEXES: Record<string, IndexDescription[]> = {
     { key: { orgId: 1, 'results.memoryId': 1, createdAt: -1 } },
     { key: { idempotencyKey: 1 }, unique: true, partialFilterExpression: { idempotencyKey: { $exists: true } }, name: 'retrieval_idempotency' },
   ],
+  [COLLECTIONS.benchmarkRuns]: [{ key: { orgId: 1, createdAt: -1 } }],
   [COLLECTIONS.outcomes]: [
     { key: { orgId: 1, taskId: 1 } },
     { key: { orgId: 1, createdAt: -1 } },
