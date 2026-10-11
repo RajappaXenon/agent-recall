@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
-import { Activity, Bot, LayoutDashboard, ScanSearch, Settings, TrendingUp } from 'lucide-react';
+import { Activity, Bot, LayoutDashboard, Settings, TrendingUp } from 'lucide-react';
 import { AppShell } from './AppShell';
 import { Placeholder } from '@/pages/Placeholder';
 import NotFound from '@/pages/NotFound';
@@ -9,6 +9,7 @@ import { Cmd } from '@/components/ui/states';
 
 const DevUi = lazy(() => import('@/pages/DevUi'));
 const MemoryExplorer = lazy(() => import('@/pages/MemoryExplorer'));
+const SearchPlayground = lazy(() => import('@/pages/SearchPlayground'));
 
 const page = (node: ReactNode) => <Suspense fallback={<Skeleton className="h-96 w-full" />}>{node}</Suspense>;
 
@@ -28,17 +29,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: '/memories', element: page(<MemoryExplorer />) },
-      {
-        path: '/search',
-        element: (
-          <Placeholder
-            title="Search Playground"
-            description="Compare keyword, semantic and hybrid retrieval on the same query."
-            icon={ScanSearch}
-            message={<>Search needs the Atlas Search indexes. Run <Cmd>npm run setup:indexes -w backend</Cmd>.</>}
-          />
-        ),
-      },
+      { path: '/search', element: page(<SearchPlayground />) },
       {
         path: '/agents',
         element: <Placeholder title="Agents" description="Agents own memories and run tasks." icon={Bot} message="No agents yet. Load the demo data to add three." />,

@@ -73,3 +73,16 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Retrieval Trace line draw (one orchestrated moment after "Run all"). */
+@keyframes trace-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.trace-draw {
+  stroke-dashoffset: 1;
+  animation: trace-draw 400ms var(--ease-out) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .trace-draw { animation: none; stroke-dashoffset: 0; stroke-dasharray: none; }
+}

@@ -33,7 +33,7 @@ export function Panel({
         <header className="flex min-h-12 items-center gap-3 border-b border-border px-4 py-2.5">
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             {title && (
-              <h2 id={headingId} className="truncate text-section text-text">
+              <h2 id={headingId} className="shrink-0 truncate text-section text-text">
                 {title}
               </h2>
             )}

@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { CreateMemorySchema, IdSchema, MemoryListQuerySchema, MemorySchema, UpdateMemorySchema, paginated } from '@agent-recall/shared';
+import {
+  CreateMemorySchema,
+  IdSchema,
+  MemoryListQuerySchema,
+  MemoryRelatedResponseSchema,
+  MemoryRetrievalsResponseSchema,
+  MemorySchema,
+  SearchableResponseSchema,
+  UpdateMemorySchema,
+  paginated,
+} from '@agent-recall/shared';
+import { memoryRetrievals, relatedMemories, searchability } from '../services/memory-insights.js';
 import { memoriesRepo } from '../db/repositories/index.js';
 import { notFound } from '../lib/errors.js';
 import { toMemory } from '../lib/serialize.js';
@@ -49,6 +60,27 @@ const memoryRoutes: FastifyPluginAsyncZod = async (app) => {
     '/memories/:id/archive',
     { schema: { tags: ['memories'], params: Params, response: { 200: MemorySchema } } },
     async (req) => toMemory(await archiveMemory(req.auth.orgId, req.params.id, userActor(req.auth.userId))),
+  );
+
+  app.get(
+    '/memories/:id/related',
+    { schema: { tags: ['memories'], params: Params, response: { 200: MemoryRelatedResponseSchema } } },
+    async (req) => relatedMemories(req.auth.orgId, req.params.id),
+  );
+
+  app.get(
+    '/memories/:id/retrievals',
+    { schema: { tags: ['memories'], params: Params, response: { 200: MemoryRetrievalsResponseSchema } } },
+    async (req) => memoryRetrievals(req.auth.orgId, req.params.id),
+  );
+
+  app.get(
+    '/memories/:id/searchable',
+    {
+      config: { rateLimit: { max: 240, timeWindow: '1 minute' } },
+      schema: { tags: ['memories'], summary: 'Is this memory retrievable through the search indexes yet?', params: Params, response: { 200: SearchableResponseSchema } },
+    },
+    async (req) => searchability(req.auth.orgId, req.params.id),
   );
 };
 

@@ -99,7 +99,16 @@ const SHOTS = [
       }
     },
   },
-  { name: 'search-fallback', path: '/search?simulate=fallback', viewports: ['1440'], skipUnlessEnv: 'SCREENSHOT_FALLBACK' },
+  {
+    name: 'search-fallback',
+    path: '/search?simulate=fallback',
+    viewports: ['1440'],
+    action: async (page) => {
+      await page.getByRole('button', { name: /Run all/ }).first().click();
+      await page.waitForSelector('[data-testid="results-ready"]', { timeout: 30_000 }).catch(() => {});
+      await page.waitForTimeout(900);
+    },
+  },
   { name: 'agents', path: '/agents', fullPage: true },
   { name: 'learning', path: '/learning', fullPage: true },
   { name: 'activity', path: '/activity', fullPage: true },

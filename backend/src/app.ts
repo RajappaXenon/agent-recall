@@ -17,6 +17,7 @@ import authRoutes from './routes/auth.js';
 import integrationRoutes from './routes/integrations.js';
 import agentRoutes from './routes/agents.js';
 import memoryRoutes from './routes/memories.js';
+import searchRoutes from './routes/search.js';
 import './services/embeddings.js';
 
 export async function buildApp(opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
@@ -59,6 +60,7 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
       await api.register(integrationRoutes);
       await api.register(agentRoutes);
       await api.register(memoryRoutes);
+      await api.register(searchRoutes);
     },
     { prefix: '/api' },
   );

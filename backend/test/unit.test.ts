@@ -22,3 +22,25 @@ describe('unit helpers', () => {
     expect(usefulnessScore({ helpful: 3, notHelpful: 1 })).toBeCloseTo(4 / 6);
   });
 });
+
+import { summarizeScoreDetails, queryTerms } from '../src/services/search.js';
+
+describe('search explanations', () => {
+  it('parses Atlas scoreDetails field and term names', () => {
+    const details = {
+      description: 'sum of:',
+      details: [
+        { description: 'weight($type:string/title:timeout in 7) [BM25Similarity], result of:', details: [] },
+        { description: 'weight($type:string/content$multi/exact:maxPoolSize=10 in 3) [BM25Similarity]', details: [] },
+        { description: 'weight($type:string/content:pool in 3) [BM25Similarity]' },
+      ],
+    };
+    const r = summarizeScoreDetails(details);
+    expect(r.fields).toEqual(['title', 'content (exact token)', 'content']);
+    expect(r.terms).toEqual(['timeout', 'maxPoolSize=10', 'pool']);
+  });
+
+  it('extracts query terms, keeping identifiers and dropping stopwords', () => {
+    expect(queryTerms('Why does maxPoolSize=10 cause a timeout?')).toEqual(['maxpoolsize=10', 'cause', 'timeout']);
+  });
+});

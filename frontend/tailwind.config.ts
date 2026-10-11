@@ -71,7 +71,7 @@ export default {
         shimmer: { '0%': { opacity: '0.5' }, '50%': { opacity: '0.9' }, '100%': { opacity: '0.5' } },
       },
       animation: {
-        'row-in': 'row-in 180ms var(--ease-out) both',
+        'row-in': 'row-in 180ms var(--ease-out) backwards',
         'draw-line': 'draw-line 400ms var(--ease-out) both',
         shimmer: 'shimmer 1.6s ease-in-out infinite',
       },

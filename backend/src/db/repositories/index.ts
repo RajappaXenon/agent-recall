@@ -24,3 +24,4 @@ export const stepExecutionsRepo = new ScopedRepository<StepExecutionDoc>(
 export const outcomesRepo = new ScopedRepository<OutcomeDoc>(async () => (await rawCollections()).outcomes);
 export const retrievalLogsRepo = new ScopedRepository<RetrievalLogDoc>(async () => (await rawCollections()).retrievalLogs);
 export const eventsRepo = new ScopedRepository<EventDoc>(async () => (await rawCollections()).events);
+export { atlasKeywordSearch, atlasVectorSearch, regexFallbackSearch, memoryWithVector, type SearchHit } from './memory-search.js';

@@ -93,3 +93,43 @@ npm run screenshots -w frontend -- --only=memories
 npm run demo:reset -w backend      (removed the gate-check memory)
 npm run typecheck && npm run lint
 ```
+
+## Phase 2 — Retrieval (2026-10-11)
+
+### Done
+- `services/rrf.ts`: Reciprocal Rank Fusion (k = 60, dedupe, ranks only, deterministic ties) + outcome policy `final = rrf × (1 + 0.15·s)`.
+- `services/search.ts`: keyword (`$search`, compound should over title×3 / content / content `multi: exact` / tags, highlights, `scoreDetails` parsed into matched fields), semantic (Voyage query embedding with LRU, `$vectorSearch` numCandidates 200, literal-term presence explanation), hybrid (both top-20 in parallel, RRF, policy, `components` returned so the Playground columns and trace share one run). Per-stage measured latencies. Every search writes `retrieval_logs`, an event, and increments `retrievalCount`.
+- Fallbacks: keyword → `fallback_regex` with "Fallback — not Atlas Search" warning; semantic → `unavailable` with reason; hybrid → "degraded to keyword-only". `forceKeywordFallback` exists only when `DEMO_MODE=true` and is labelled as forced.
+- Tenant-scoped `$search` / `$vectorSearch` helpers in `db/repositories/memory-search.ts` inject `orgId` + `archived:false` into the search stage itself.
+- Routes: `POST /api/search/{keyword,semantic,hybrid}`, `GET /api/search/logs`, `GET /api/memories/:id/related` (taxonomic links both ways + vector neighbours), `/retrievals`, `/searchable`.
+- Search Playground: query panel, filters popover, outcome-policy switch with formula tooltip, three columns, Retrieval Trace (SVG, stroke width linear in RRF contribution, dashed stubs labelled `K15`/`S12` for sources outside the visible top 10, dashed lines for fallback engines), hover highlight across columns with 30% dim, FLIP re-ordering (300 ms) when the policy toggles, row stagger (40 ms) + line draw (400 ms) after Run all, reduced-motion respected, tabs + `K3 · S3` rank chips below 1280 px, Why-this-result panel, selection panel.
+- `docs/RANKING.md`.
+
+### Design decision
+- Column order is **Keyword | Hybrid | Semantic** (DESIGN.md mock shows K | S | H). With hybrid in the middle every trace line goes to an adjacent gutter; with K | S | H the keyword lines would have to pass behind the semantic panel.
+
+### Gate
+| Check | Result |
+|---|---|
+| RRF unit tests (dedupe, rank math, no raw-score mixing, policy) | `test/rrf.test.ts` 10/10 |
+| Each mode returns the seeded pool-timeout memories | `test/search.integration.test.ts` (own `__test__` data, polls `/searchable` until indexed): keyword `atlas_search`, semantic `atlas_vector_search` (also finds the paraphrased "hung under load" memory), hybrid `rrf` with exact RRF math checked per result |
+| Fallback labelled when index dropped | Tested by querying a non-existent index name (dropping the real index needs user approval): `engine: fallback_regex`, warning "Fallback — not Atlas Search"; vector missing → semantic `unavailable`, hybrid "degraded to keyword-only" |
+| Full suite | backend `Tests 27 passed (27)`, frontend `Tests 2 passed (2)`; typecheck, lint, build pass |
+| Live demo query (API) | hybrid: verified fix procedure K3·S3 → rank 1 (was 2 before policy); "Scale out API pods" (verified_failure) drops out of the hybrid top 8; semantic surfaces "Billing service hung…" which shares no keywords |
+
+### Screenshot review
+Round 1 → fixes:
+1. Red "↓ from 1" badges on unverified memories that only moved because verified ones rose — misleading. Movement badges now appear only when the policy multiplier ≠ 1.
+2. Column headers crowded ("Seman…", wrapped "1323 ms", "Key…" in fallback). Run became an icon button with tooltip; latency nowrap; title no longer shrinks.
+3. Hover did not dim other rows: the entrance animation's `fill-mode: both` pinned opacity at 1. Changed to `backwards`. Verified with a Playwright probe (`opacity: 0.3` on non-hovered rows).
+4. Hybrid fallback column repeated the keyword warning; hybrid now only states how components affected fusion.
+5. Trace lines at rest were busy (70% opacity) → 50%; dimmed lines 8%.
+6. Query textarea clipped on mobile → 4 rows below 1280 px.
+Round 2: re-shot `search*` at 1440/1024/390; all resolved.
+
+### Commands run
+```
+npx vitest run (backend), npm test, npm run typecheck, npm run lint, npm run build
+npm run screenshots -w frontend -- --only=search   (×2), --only=search-hover
+curl POST /api/search/{keyword,semantic,hybrid} with the demo query
+```
