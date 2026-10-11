@@ -251,5 +251,55 @@ npm test, npm run typecheck, npm run lint, npm run build, npm run demo:reset -w 
   - `GET /api/integrations/elevenlabs/status?refresh=true` → `"status":"not_configured","detail":"ELEVENLABS_API_KEY is not set. Listen / Export audio are disabled."`
   - `POST /api/audio/speech` → `{"error":{"code":"TTS_NOT_CONFIGURED",…}} [503]`; 2501 chars → `VALIDATION_ERROR [400]`
   - Listen buttons render disabled with the explanation (Settings / answer screenshots).
-- **With a real key: NOT verified yet — `ELEVENLABS_API_KEY` / `ELEVENLABS_VOICE_ID` are not set.** Blocker until the user adds them; then: Settings → Refresh → Test voice, and Listen on an answer.
+- With a real key (verified later in Phase 7, after the user added `ELEVENLABS_API_KEY` / `ELEVENLABS_VOICE_ID`):
+  - probe: `elevenlabs: connected — Voice "George - Warm, Captivating Storyteller" · eleven_multilingual_v2`
+  - `POST /api/audio/speech` (135 chars) → `HTTP 200 · 155524 bytes · 2.16 s`, `content-type: audio/mpeg`, `cache-control: no-store`, body starts with an `ID3` tag; event `Audio generated (135 characters) {"characters":135,"model":"eleven_multilingual_v2"}` (no content stored)
+  - UI (Playwright, Settings → Test voice): button enabled → `/api/audio/speech` 200 `audio/mpeg` → button label `Pause` (playing).
 - Backend tests still 34/34.
+
+## Phase 7 — Ship (2026-10-11)
+
+### Done
+- `README.md` (what it does, architecture, repo tree, commands, env, deploy, limitations), `docs/DEMO.md` (click-by-click script incl. crash moment and troubleshooting), `docs/ATLAS_SETUP.md` (access, DNS/IP troubleshooting, both index definitions, Atlas UI steps, recreate flow), `docs/RANKING.md` (Phase 2).
+- Deployment config: `render.yaml` (web service `agent-recall-api`, health check `/api/health`, binds `0.0.0.0:$PORT`; background worker `agent-recall-worker`; secrets `sync: false`), `frontend/vercel.json` (workspace build, SPA rewrite to `index.html`).
+- Production build smoke test: `node backend/dist/server.js` → `/api/health` 200, `/api/ready` `connected: true` (23 ms); `NODE_ENV=production node dist/worker.js` starts. Fixed: the production `JWT_SECRET` guard lived in shared config and would have crashed the worker on Render; moved to the API server.
+- Final screenshot review (46 shots, 3 widths) and "remove one accessory" pass:
+  | Screen | Removed |
+  |---|---|
+  | Search Playground | decorative ⏎ glyph inside "Run all" |
+  | Memory Explorer | green dot on every "Embedded" row (only pending/failed keep a dot) |
+  | Overview | redundant "Settings" button on Integration health |
+  | Learning & Insights | bars under "Most retrieved" that repeated the count |
+  | Agents | repeated robot icon on each agent row |
+  | Task detail | step-5 summary that duplicated the Output panel |
+  | Settings | meta values already present in the status line |
+- Screenshot script: waits for the Run-all re-render before ticking rows (a race had ticked the wrong row in one shot; the backend recorded exactly what was ticked).
+
+### Final gate (real output)
+```
+npm run typecheck   → backend + frontend tsc --noEmit: no errors
+npm run lint        → eslint . : no output (clean)
+npm test            → backend  Test Files 6 passed (6) · Tests 34 passed (34)   (Atlas, no skips)
+                      frontend Test Files 1 passed (1) · Tests 2 passed (2)
+npm run build       → shared + backend tsc, frontend vite "✓ built in 3.42s"
+npm run demo:e2e    → keyword atlas_search 434 ms · semantic atlas_vector_search 310 ms · hybrid rrf 163 ms
+                      new memory "Resolved: Our API started timing out after a database connection pool change"
+                      searchable after 1.3 s (keyword=true, vector=true) · new outcome memory hybrid rank 1
+                      outcome policy on vs off: 5 of 10 results change position · ✔ finished in 5.0s
+recovery.e2e.test.ts → ✓ (SIGKILL after 2 checkpoints, resumed by a second worker, steps 0–1 executed once)
+```
+
+### Deployment
+- **Not deployed**: no Render / Vercel credentials or account access in this session (account-level action → user's call). Manual steps:
+  1. Render → New → Blueprint → this repo (`render.yaml`). Set secrets: `MONGODB_URI`, `FRONTEND_URL` (the Vercel URL), `VOYAGE_API_KEY` (+ `VOYAGE_BASE_URL=https://ai.mongodb.com/v1` for Atlas model keys), `LLM_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`.
+  2. Atlas → Network Access → add Render's outbound IPs (service → Connect → Outbound) or `0.0.0.0/0` (known limitation).
+  3. Vercel → New Project → root `frontend/` (picks up `vercel.json`) → env `VITE_API_URL=https://<render-api>.onrender.com` → deploy.
+  4. Verify: `curl https://<api>/api/ready` shows `connected: true`; open the Vercel URL → header pill.
+
+## Final report
+
+**Works (verified live against the user's Atlas cluster):** demo auth; memories/agents CRUD with Voyage embeddings; Atlas Search and Vector Search indexes (queryable); keyword / semantic / hybrid (RRF + outcome policy) retrieval with explanations, labelled fallbacks, retrieval logs; Search Playground with Retrieval Trace; grounded answers (template mode) with citations; outcome loop (verification rules, outcome → episodic memory, searchable polling, re-ranking); checkpointed worker with leases and real crash recovery; Overview / Learning / Activity / Agents / Task detail / Settings on real data; ElevenLabs Listen / Export / Test voice with a real key.
+
+**Integrations:** MongoDB Atlas, Atlas Search, Atlas Vector Search, Voyage (Atlas model API key via `https://ai.mongodb.com/v1`), ElevenLabs — each confirmed by live probe and real calls. **Anthropic: not verified** — `LLM_API_KEY` is empty, so answers use the labelled template path (code path for the real model is implemented and typed against SDK 0.133; the test env forces template mode).
+
+**Known limitations:** demo auth only; Atlas tier not readable by the driver (`ATLAS_TIER`); playbook steps deterministic (no LLM); seeded fix procedure is already verified per SPEC §13, so the live demo adds evidence rather than flipping status (the flip is covered by tests); not deployed.

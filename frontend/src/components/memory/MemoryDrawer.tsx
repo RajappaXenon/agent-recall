@@ -27,7 +27,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export function EmbeddingStatus({ memory }: { memory: Memory }) {
-  if (memory.embeddingStatus === 'ready') return <StatusDot tone="success" label="Embedded" />;
+  if (memory.embeddingStatus === 'ready') return <span className="text-dense text-text-muted">Embedded</span>;
   if (memory.embeddingStatus === 'failed') return <StatusDot tone="danger" label="Embedding failed" />;
   return <StatusDot tone="warning" label="Embedding pending" />;
 }

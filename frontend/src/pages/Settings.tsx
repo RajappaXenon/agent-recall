@@ -46,8 +46,8 @@ const SETUP: Record<IntegrationKey, React.ReactNode> = {
   ),
 };
 
-function MetaList({ meta }: { meta: IntegrationStatus['meta'] }) {
-  const entries = Object.entries(meta).filter(([, v]) => v !== null && v !== '');
+function MetaList({ meta, detail }: { meta: IntegrationStatus['meta']; detail: string }) {
+  const entries = Object.entries(meta).filter(([, v]) => v !== null && v !== '' && !detail.includes(String(v)));
   if (!entries.length) return null;
   return (
     <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-caption font-normal">
@@ -114,7 +114,7 @@ export default function Settings() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-dense text-text">{i.detail}</p>
-                  <MetaList meta={i.meta} />
+                  <MetaList meta={i.meta} detail={i.detail} />
                   {i.status !== 'connected' && <p className="mt-1.5 max-w-prose text-caption font-normal text-text-muted">{SETUP[i.key]}</p>}
                 </div>
                 <div className="flex items-center gap-3 md:justify-end">

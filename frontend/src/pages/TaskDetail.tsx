@@ -47,10 +47,8 @@ function checkpointBody(c: Checkpoint): React.ReactNode {
     }
     case 3:
       return `${(o.steps as string[] | undefined)?.length ?? 0} remediation steps drafted`;
-    default: {
-      const text = String(o.summary ?? '');
-      return text.length > 180 ? `${text.slice(0, 180).replace(/\s+\S*$/, '')}…` : text;
-    }
+    default:
+      return o.summary ? 'Summary written (see Output)' : 'No summary';
   }
 }
 

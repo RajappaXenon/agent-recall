@@ -32,7 +32,6 @@ function AgentRow({ a, active, onSelect }: { a: AgentWithStats; active: boolean;
         )}
       >
         <div className="flex items-center gap-2">
-          <Bot className="size-4 shrink-0 text-text-muted" aria-hidden />
           <span className="flex-1 truncate text-dense font-medium text-text">{a.name}</span>
           {a.isSeed && <DemoDataBadge />}
         </div>

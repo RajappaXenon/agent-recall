@@ -59,9 +59,6 @@ function load(): Config {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  if (parsed.data.NODE_ENV === 'production' && parsed.data.JWT_SECRET.startsWith('dev-only')) {
-    throw new Error('JWT_SECRET must be set in production');
-  }
   return parsed.data;
 }
 

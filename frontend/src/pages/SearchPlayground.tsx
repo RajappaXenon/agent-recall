@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CornerDownLeft, Info, ListChecks, Play, SlidersHorizontal, Sparkles, X } from 'lucide-react';
+import { Info, ListChecks, Play, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { MEMORY_TYPES, type MemoryType, type SearchFilters, type SearchMode, type SearchResponse, type SearchResponseBase, type SearchResult, type VerificationStatus } from '@agent-recall/shared';
 import { api, ApiError } from '@/lib/api';
 import { useAgents } from '@/lib/queries';
@@ -179,7 +179,6 @@ export default function SearchPlayground() {
               <Button type="submit" variant="primary" loading={Boolean(loading.hybrid && loading.keyword)} disabled={!query.trim()}>
                 {!(loading.hybrid && loading.keyword) && <Play aria-hidden />}
                 Run all
-                <CornerDownLeft className="opacity-60" aria-hidden />
               </Button>
             </div>
           </div>

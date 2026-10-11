@@ -90,6 +90,7 @@ const SHOTS = [
       await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
       const boxes = page.locator('[data-column="hybrid"] button[role="checkbox"]');
       const n = Math.min(2, await boxes.count());
+      await page.waitForTimeout(900);
       for (let i = 0; i < n; i++) await boxes.nth(i).click();
       const use = page.getByRole('button', { name: /Use in agent task/ });
       if (await use.count()) {
@@ -118,6 +119,7 @@ const SHOTS = [
       await page.getByRole('button', { name: /Run all/ }).first().click();
       await page.waitForSelector('[data-testid="results-ready"]', { state: 'attached', timeout: 30_000 }).catch(() => {});
       const boxes = page.locator('[data-column="hybrid"] button[role="checkbox"]');
+      await page.waitForTimeout(900);
       for (let i = 0; i < Math.min(2, await boxes.count()); i++) await boxes.nth(i).click();
       await page.getByRole('button', { name: /Use in agent task/ }).first().click();
       await page.waitForSelector('[data-testid="answer-ready"]', { state: 'attached', timeout: 45_000 }).catch(() => {});

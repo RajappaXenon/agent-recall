@@ -7,7 +7,6 @@ import { formatRelative } from '@/lib/utils';
 import { PageHeader, Panel } from '@/components/ui/panel';
 import { MetricTile } from '@/components/ui/metric-tile';
 import { Badge, DemoDataBadge, MemoryTypeBadge, VerificationBadge } from '@/components/ui/badge';
-import { ScoreBar } from '@/components/ui/score-bar';
 import { MetricTileSkeleton, Skeleton, TableRowsSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { OutcomeBars, useChartTable } from '@/components/charts/charts';
@@ -18,7 +17,6 @@ export default function Learning() {
   const outcomeView = useChartTable('Outcomes per week');
   const t = d?.outcomeTotals;
   const recorded = t ? t.worked + t.failed : 0;
-  const maxRetrieved = Math.max(1, ...(d?.mostRetrieved.map((m) => m.retrievalCount) ?? [1]));
 
   return (
     <>
@@ -140,13 +138,12 @@ export default function Learning() {
             <ul>
               {d.mostRetrieved.map((m) => (
                 <li key={m.id} className="border-b border-border last:border-b-0">
-                  <Link to={`/memories?open=${m.id}`} className="focus-ring flex flex-col gap-1.5 px-4 py-2.5 hover:bg-surface-raised">
+                  <Link to={`/memories?open=${m.id}`} className="focus-ring flex flex-col px-4 py-2.5 hover:bg-surface-raised">
                     <span className="flex items-center gap-2">
                       <MemoryTypeBadge type={m.type} compact />
                       <span className="min-w-0 flex-1 truncate text-dense text-text">{m.title}</span>
                       <span className="tabular text-caption font-normal text-text-muted">{m.retrievalCount}×</span>
                     </span>
-                    <ScoreBar value={m.retrievalCount} max={maxRetrieved} colorClass="bg-accent-2" label="Retrievals relative to the most retrieved memory" />
                   </Link>
                 </li>
               ))}

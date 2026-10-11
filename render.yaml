@@ -1,0 +1,89 @@
+# Render Blueprint: API (web service) + task worker (background worker).
+# Secrets are `sync: false` — set them in the Render dashboard, never in this file.
+# Atlas: allow Render's outbound IPs under Network Access (or 0.0.0.0/0 for the hackathon; see docs/ATLAS_SETUP.md).
+services:
+  - type: web
+    name: agent-recall-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build -w shared && npm run build -w backend
+    startCommand: npm run start -w backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: 0.0.0.0
+      - key: MONGODB_URI
+        sync: false
+      - key: DB_NAME
+        value: agent_recall
+      - key: FRONTEND_URL
+        sync: false # e.g. https://agent-recall.vercel.app (comma-separate several origins)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AUTH_MODE
+        value: demo
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: VOYAGE_MODEL
+        value: voyage-3.5
+      - key: VOYAGE_DIMENSIONS
+        value: "1024"
+      - key: VOYAGE_BASE_URL
+        value: https://api.voyageai.com/v1 # https://ai.mongodb.com/v1 for Atlas model API keys
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: claude-opus-5-5
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: ELEVENLABS_MODEL_ID
+        value: eleven_multilingual_v2
+      - key: DEMO_MODE
+        value: "true"
+      - key: LEASE_MS
+        value: "15000"
+      - key: DEMO_STEP_DELAY_MS
+        value: "4000"
+      - key: LOG_LEVEL
+        value: info
+
+  - type: worker
+    name: agent-recall-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build -w shared && npm run build -w backend
+    # Render restarts the process if it exits non-zero, so the demo crash resumes on a new worker.
+    startCommand: npm run worker:prod -w backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: MONGODB_URI
+        sync: false
+      - key: DB_NAME
+        value: agent_recall
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: VOYAGE_MODEL
+        value: voyage-3.5
+      - key: VOYAGE_DIMENSIONS
+        value: "1024"
+      - key: VOYAGE_BASE_URL
+        value: https://api.voyageai.com/v1
+      - key: DEMO_MODE
+        value: "true"
+      - key: LEASE_MS
+        value: "15000"
+      - key: DEMO_STEP_DELAY_MS
+        value: "4000"
+      - key: LOG_LEVEL
+        value: info

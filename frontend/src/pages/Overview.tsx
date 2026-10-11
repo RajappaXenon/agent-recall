@@ -136,11 +136,6 @@ export default function Overview() {
         </Panel>
         <Panel
           title="Integration health"
-          actions={
-            <Button asChild size="sm" variant="ghost">
-              <Link to="/settings">Settings</Link>
-            </Button>
-          }
           flush
         >
           {integrations.isLoading ? (

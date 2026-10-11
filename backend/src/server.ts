@@ -3,6 +3,11 @@ import { config } from './config.js';
 import { closeMongo, describeMongoError, isMongoConfigured } from './db/client.js';
 import { ensureRegularIndexes } from './db/indexes.js';
 
+// Only the API signs tokens, so only the API requires a real secret in production.
+if (config.NODE_ENV === 'production' && config.JWT_SECRET.startsWith('dev-only')) {
+  throw new Error('JWT_SECRET must be set in production');
+}
+
 const app = await buildApp();
 
 if (isMongoConfigured()) {
