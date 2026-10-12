@@ -11,6 +11,7 @@ import {
 } from '../db/repositories/index.js';
 import { isVoyageConfigured } from '../services/embeddings.js';
 import { embedMany } from '../services/memories.js';
+import { backfillOutcomeQuestions } from '../services/outcome-context.js';
 import { SEED_AGENTS, SEED_MEMORIES, SEED_OUTCOMES, type AgentKey } from './seed-data.js';
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
@@ -158,6 +159,7 @@ export async function seedDemo(): Promise<SeedResult> {
   if (isVoyageConfigured()) {
     const all = (await memoriesRepo.find(orgId, { isSeed: true })) as MemoryDoc[];
     embedding = await embedMany(orgId, all);
+    await backfillOutcomeQuestions(orgId);
   }
 
   return { orgId, agents: Object.keys(agentIds).length, memories: SEED_MEMORIES.length, outcomes: SEED_OUTCOMES.length, embedding };

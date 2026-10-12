@@ -7,6 +7,7 @@ import { BENCHMARK_QUERIES, BENCHMARK_VERSION } from '../eval/benchmark-set.js';
 import { meanMetrics, percentile, scoreQuery } from '../eval/metrics.js';
 import { logEvent, type Actor } from './events.js';
 import { runSearch } from './search.js';
+import { OUTCOME_POLICY_NAME } from './rrf.js';
 
 export const LABELLING_RULE =
   'Grade 3: the memory that directly answers the question (for "what fixed this" questions, the procedure or resolution that worked; for "should we do X", the memory recording what happened when X was tried, even if it failed). Grade 1: useful supporting context. Everything else: not relevant. Labels were written before the first run and are not tuned to results.';
@@ -89,7 +90,7 @@ async function execute(orgId: ObjectId, actor: Actor, userId: ObjectId | null): 
         top: rankings[c].slice(0, 5).map((r) => ({ ...r, title: titleByKey.get(r.key) ?? null })),
       };
     }
-    queries.push({ id: q.id, category: q.category, query: q.query, relevantCount: labelled.length, excludedNonSeedHits: excluded, perConfig });
+    queries.push({ id: q.id, split: q.split ?? 'dev', category: q.category, query: q.query, relevantCount: labelled.length, excludedNonSeedHits: excluded, perConfig });
   }
 
   const aggregate = (qs: typeof queries) =>
@@ -99,10 +100,16 @@ async function execute(orgId: ObjectId, actor: Actor, userId: ObjectId | null): 
     const qs = queries.filter((q) => q.category === cat);
     byCategory[cat] = { queries: qs.length, metrics: aggregate(qs) };
   }
+  const bySplit: BenchmarkRunDoc['byCategory'] = {};
+  for (const split of ['dev', 'holdout'] as const) {
+    const qs = queries.filter((q) => (q.split ?? 'dev') === split);
+    if (qs.length) bySplit[split] = { queries: qs.length, metrics: aggregate(qs) };
+  }
   if (missingSeedKeys.length) warnings.add(`Labelled seed memories missing from this workspace: ${missingSeedKeys.join(', ')}. Run npm run seed -w backend.`);
 
   const doc = await benchmarkRunsRepo.insertOne(orgId, {
     version: BENCHMARK_VERSION,
+    rankingPolicy: OUTCOME_POLICY_NAME,
     userId,
     durationMs: Math.round(performance.now() - started),
     corpus: { seedMemories: titleByKey.size, nonSeedMemories, missingSeedKeys },
@@ -110,6 +117,7 @@ async function execute(orgId: ObjectId, actor: Actor, userId: ObjectId | null): 
     warnings: [...warnings],
     overall: aggregate(queries),
     byCategory,
+    bySplit,
     latencyMs: {
       keyword: { p50: percentile(latencies.keyword, 50), p95: percentile(latencies.keyword, 95) },
       semantic: { p50: percentile(latencies.semantic, 50), p95: percentile(latencies.semantic, 95) },
@@ -132,6 +140,7 @@ function toSummary(d: BenchmarkRunDoc): BenchmarkRunSummary {
   return {
     id: d._id.toHexString(),
     version: d.version,
+    rankingPolicy: d.rankingPolicy ?? 'global-v1',
     createdAt: d.createdAt.toISOString(),
     durationMs: d.durationMs,
     queryCount: d.queries.length,
@@ -142,7 +151,7 @@ function toSummary(d: BenchmarkRunDoc): BenchmarkRunSummary {
 }
 
 function toRun(d: BenchmarkRunDoc): BenchmarkRun {
-  return { ...toSummary(d), corpus: d.corpus, byCategory: d.byCategory, latencyMs: d.latencyMs, queries: d.queries as BenchmarkRun['queries'] };
+  return { ...toSummary(d), corpus: d.corpus, byCategory: d.byCategory, bySplit: d.bySplit ?? {}, latencyMs: d.latencyMs, queries: d.queries.map((q) => ({ ...q, split: q.split ?? 'dev' })) as BenchmarkRun['queries'] };
 }
 
 export async function listBenchmarkRuns(orgId: ObjectId, limit = 20): Promise<BenchmarkRunSummary[]> {
@@ -165,6 +174,7 @@ export async function benchmarkSet(orgId: ObjectId): Promise<BenchmarkSetRespons
     labellingRule: LABELLING_RULE,
     queries: BENCHMARK_QUERIES.map((q) => ({
       id: q.id,
+      split: q.split ?? 'dev',
       category: q.category,
       query: q.query,
       relevant: Object.entries(q.relevant)

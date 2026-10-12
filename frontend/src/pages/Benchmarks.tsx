@@ -33,6 +33,20 @@ const METRICS: { key: keyof BenchmarkMetrics; label: string; pct: boolean; help:
 type Category = 'all' | 'paraphrase' | 'identifier' | 'fix';
 const CATEGORY_LABEL: Record<Category, string> = { all: 'All', paraphrase: 'Paraphrased', identifier: 'Exact identifiers', fix: 'What fixed it' };
 
+type Split = 'all' | 'dev' | 'holdout';
+const SPLIT_LABEL: Record<Split, string> = { all: 'All questions', dev: 'Dev', holdout: 'Held-out' };
+const POLICY_LABEL: Record<string, string> = {
+  'global-v1': 'Outcome policy: global ×1.15',
+  'contextual-v1': 'Outcome policy: contextual (question similarity)',
+};
+
+/** Macro average over the selected questions: the same aggregation the API uses. */
+function averageOf(queries: BenchmarkQueryResult[], c: BenchmarkConfig): BenchmarkMetrics {
+  const n = queries.length || 1;
+  const avg = (k: keyof BenchmarkMetrics) => queries.reduce((sum, q) => sum + q.perConfig[c].metrics[k], 0) / n;
+  return { hitAt1: avg('hitAt1'), mrrAt10: avg('mrrAt10'), recallAt5: avg('recallAt5'), ndcgAt5: avg('ndcgAt5') };
+}
+
 const fmt = (v: number, pct: boolean) => (pct ? `${Math.round(v * 1000) / 10}%` : v.toFixed(3));
 
 function Swatch({ config }: { config: BenchmarkConfig }) {
@@ -146,6 +160,7 @@ function RunStrip({ run }: { run: BenchmarkRun | undefined }) {
         <span className="tabular">{run.queryCount} questions</span>
         <span className="tabular">{run.corpus.seedMemories} labelled memories</span>
         <span className="tabular">{(run.durationMs / 1000).toFixed(1)} s</span>
+        <span>{POLICY_LABEL[run.rankingPolicy] ?? run.rankingPolicy}</span>
         <EngineBadge engine={run.engines.keyword} />
         <EngineBadge engine={run.engines.semantic} />
         <DemoDataBadge />
@@ -161,8 +176,11 @@ function RunStrip({ run }: { run: BenchmarkRun | undefined }) {
 
 function ResultsPanel({ run, className }: { run: BenchmarkRun | undefined; className?: string }) {
   const [cat, setCat] = React.useState<Category>('all');
-  const metrics = !run ? null : cat === 'all' ? run.overall : run.byCategory[cat]?.metrics;
-  const count = !run ? 0 : cat === 'all' ? run.queryCount : (run.byCategory[cat]?.queries ?? 0);
+  const [split, setSplit] = React.useState<Split>('all');
+  const selected = run?.queries.filter((q) => (cat === 'all' || q.category === cat) && (split === 'all' || q.split === split)) ?? [];
+  const metrics = !run || selected.length === 0 ? null : (Object.fromEntries(CONFIGS.map((c) => [c, averageOf(selected, c)])) as Record<BenchmarkConfig, BenchmarkMetrics>);
+  const count = selected.length;
+  const hasHoldout = run?.queries.some((q) => q.split === 'holdout') ?? false;
   const best = (k: keyof BenchmarkMetrics) => (metrics ? Math.max(...CONFIGS.map((c) => metrics[c][k])) : 0);
   const latency = (c: BenchmarkConfig) => (!run ? null : c === 'keyword' ? run.latencyMs.keyword : c === 'semantic' ? run.latencyMs.semantic : run.latencyMs.hybrid);
   return (
@@ -172,7 +190,7 @@ function ResultsPanel({ run, className }: { run: BenchmarkRun | undefined; class
       className={className}
       flush
     >
-      <div className="overflow-x-auto border-b border-border px-4 py-2">
+      <div className="flex flex-wrap gap-2 overflow-x-auto border-b border-border px-4 py-2">
         <SegmentedControl
           size="sm"
           aria-label="Question type"
@@ -180,8 +198,19 @@ function ResultsPanel({ run, className }: { run: BenchmarkRun | undefined; class
           onValueChange={setCat}
           options={(['all', 'paraphrase', 'identifier', 'fix'] as const).map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))}
         />
+        {hasHoldout && (
+          <SegmentedControl
+            size="sm"
+            aria-label="Question split"
+            value={split}
+            onValueChange={setSplit}
+            options={(['all', 'dev', 'holdout'] as const).map((v) => ({ value: v, label: SPLIT_LABEL[v] }))}
+          />
+        )}
       </div>
-      {!metrics ? (
+      {run && selected.length === 0 ? (
+        <EmptyState icon={FlaskConical} message="No questions match this filter." />
+      ) : !metrics ? (
         <TableRowsSkeleton rows={4} cols={6} />
       ) : (
         <div className="overflow-x-auto">
@@ -244,6 +273,9 @@ function MethodPanel() {
           Labels were written before the first run.
         </li>
         <li>Questions are paraphrased problems, exact identifiers (error names, config keys), or "what fixed this before?".</li>
+        <li>
+          <span className="text-text">Held-out</span> questions were committed before the contextual outcome policy existed and were not used to choose its settings.
+        </li>
         <li>
           Runs call the same search code as the Playground without logging, so they don't change retrieval counts. Memories created after seeding have no labels and are left out of
           scoring.
@@ -385,7 +417,7 @@ function HistoryPanel({ runs, selected, onSelect }: { runs: BenchmarkRunSummary[
               >
                 <span className="min-w-0 flex-1 truncate text-dense text-text">{formatRelative(r.createdAt)}</span>
                 <span className="tabular text-caption font-normal text-text-muted">
-                  hybrid nDCG {r.overall.hybrid.ndcgAt5.toFixed(2)} · + outcomes {r.overall.hybrid_policy.ndcgAt5.toFixed(2)}
+                  {r.rankingPolicy === 'contextual-v1' ? 'contextual' : 'global'} · hybrid nDCG {r.overall.hybrid.ndcgAt5.toFixed(2)} · + outcomes {r.overall.hybrid_policy.ndcgAt5.toFixed(2)}
                 </span>
               </button>
             </li>
@@ -442,6 +474,7 @@ function QueryRow({ q, open, onToggle }: { q: BenchmarkQueryResult; open: boolea
           <button type="button" onClick={onToggle} aria-expanded={open} className="focus-ring flex w-full min-w-0 items-center gap-2 rounded-control text-left">
             <ChevronRight className={cn('size-3.5 shrink-0 text-text-muted transition-transform duration-fast', open && 'rotate-90')} aria-hidden />
             <Badge className="hidden md:inline-flex">{CATEGORY_LABEL[q.category]}</Badge>
+            {q.split === 'holdout' && <Badge tone="accent" className="hidden md:inline-flex">held-out</Badge>}
             <span className="min-w-0 flex-1 truncate text-text" title={q.query}>
               {q.query}
             </span>

@@ -24,8 +24,11 @@ export type BenchmarkMetrics = z.infer<typeof BenchmarkMetricsSchema>;
 const PerConfig = <T extends z.ZodTypeAny>(item: T) =>
   z.object({ keyword: item, semantic: item, hybrid: item, hybrid_policy: item });
 
+export const BenchmarkSplitSchema = z.enum(['dev', 'holdout']);
+
 export const BenchmarkQueryResultSchema = z.object({
   id: z.string(),
+  split: BenchmarkSplitSchema.default('dev'),
   category: BenchmarkCategorySchema,
   query: z.string(),
   relevantCount: z.number().int(),
@@ -43,6 +46,8 @@ export type BenchmarkQueryResult = z.infer<typeof BenchmarkQueryResultSchema>;
 export const BenchmarkRunSummarySchema = z.object({
   id: IdSchema,
   version: z.string(),
+  /** Which outcome policy ranked the hybrid + outcomes column (runs before this field: global ×1.15). */
+  rankingPolicy: z.string().default('global-v1'),
   createdAt: z.string(),
   durationMs: z.number(),
   queryCount: z.number().int(),
@@ -55,6 +60,7 @@ export type BenchmarkRunSummary = z.infer<typeof BenchmarkRunSummarySchema>;
 export const BenchmarkRunSchema = BenchmarkRunSummarySchema.extend({
   corpus: z.object({ seedMemories: z.number().int(), nonSeedMemories: z.number().int(), missingSeedKeys: z.array(z.string()) }),
   byCategory: z.record(z.object({ queries: z.number().int(), metrics: PerConfig(BenchmarkMetricsSchema) })),
+  bySplit: z.record(z.object({ queries: z.number().int(), metrics: PerConfig(BenchmarkMetricsSchema) })).default({}),
   latencyMs: z.object({
     keyword: z.object({ p50: z.number(), p95: z.number() }),
     semantic: z.object({ p50: z.number(), p95: z.number() }),
@@ -70,6 +76,7 @@ export const BenchmarkSetResponseSchema = z.object({
   queries: z.array(
     z.object({
       id: z.string(),
+      split: BenchmarkSplitSchema,
       category: BenchmarkCategorySchema,
       query: z.string(),
       relevant: z.array(z.object({ key: z.string(), title: z.string().nullable(), grade: z.number().int() })),

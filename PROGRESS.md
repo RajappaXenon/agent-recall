@@ -488,3 +488,29 @@ screenshots         → 46 captured, no "did not appear" warnings (React Router 
 - `npm run typecheck`: clean, including `mcp`.
 - `npm test`: backend 53/53 (adds 7 benchmark tests), frontend 2/2.
 - `npm run build`: builds every workspace, including `mcp/dist`.
+
+## Contextual outcome policy (2026-10-11)
+
+1. **Held-out questions:** 10 committed first (`528dd1d`), before any policy code.
+2. **Baseline run** with the global policy (`global-v1`, stored): hybrid nDCG@5 dev 0.852 → 0.702 with outcomes, held-out 0.913 → 0.689.
+3. **Calibration:** `npm run calibrate -w backend` on 24 question pairs unrelated to the seed and benchmark (`src/eval/calibration-pairs.ts`), using a rule fixed before measuring.
+   - same-problem pairs: min 0.628, median 0.706;
+   - different-problem pairs: max 0.607;
+   - result: CONTEXT_LOW 0.61, CONTEXT_HIGH 0.71.
+4. **Policy `contextual-v1`:** `final = rrf × (1 + 0.15·s·context)`.
+   - Recording an outcome embeds its question (`outcomes.question` / `questionEmbedding`); `seed` and `embed:backfill` backfill them.
+   - Hybrid search compares the query embedding with the closest matching outcome question. Explanations and `policyContext` show the similarity, weight and question.
+   - With no query embedding, no outcome signal is applied, and a warning says so.
+5. **Result** (stored run, `contextual-v1`):
+   - hybrid + outcomes nDCG@5: dev 0.829, held-out 0.885 (plain hybrid: 0.852 / 0.913);
+   - the first direct answer moved on 3 questions instead of 21.
+   - Still below plain hybrid: the remaining loss is the "should we scale out?" questions, where the demoted verified failure is the useful answer. Not tuned further; the held-out set has been seen.
+6. **Benchmark changes:**
+   - Runs record `rankingPolicy` and `bySplit`.
+   - The page has a dev/held-out filter and the policy label, and the history shows the policy.
+   - `demo:reset` keeps `benchmark_runs`, so before/after runs stay comparable.
+7. **Checks:**
+   - lint clean; typecheck clean;
+   - tests: backend 58/58 (contextual unit tests, plus Atlas integration tests for a similar question boosting and an unrelated one not); frontend 2/2;
+   - build ok;
+   - Benchmarks page: 0 console errors, 390 px mobile without overflow.

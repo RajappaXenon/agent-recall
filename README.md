@@ -17,7 +17,7 @@ Built for the MongoDB "Harness Engineering & Model Wrangling" hackathon.
 |---|---|
 | **Search Playground** | One query through keyword, semantic and hybrid retrieval side by side. The Retrieval Trace draws how each memory's keyword and semantic ranks fuse into its hybrid rank. Every result explains why it came back. |
 | **Grounded answers** | Answers are grounded in selected memories, which go into the prompt as untrusted `<memory>` blocks, and the answer cites them. The model is Claude (`claude-opus-5-5`) or Groq (`openai/gpt-oss-120b`), with Groq as the automatic fallback. Without any LLM key, the answer is a clearly labelled template answer. |
-| **Learning loop** | "Did this work?" records an outcome. A successful outcome verifies the cited procedure, the outcome becomes a new episodic memory, and the outcome policy `final = rrf × (1 + 0.15·s)` ranks verified procedures higher. No model weights change. |
+| **Learning loop** | "Did this work?" records an outcome. A successful outcome verifies the cited procedure, the outcome becomes a new episodic memory, and the contextual outcome policy `final = rrf × (1 + 0.15·s·context)` ranks memories verified on similar questions higher. No model weights change. |
 | **Retrieval benchmark** | 24 hand-labelled questions (paraphrased problems, exact identifiers, "what fixed this before?") run through the real search pipeline. It reports Hit@1, MRR@10, Recall@5, graded nDCG@5 and latency for keyword, semantic, hybrid, and hybrid with outcome signals, on the Benchmarks page and via `npm run benchmark -w backend`. |
 | **MCP server** | `mcp/` exposes the memory to any MCP client (Claude Code, Claude Desktop, other agents): `recall`, `get_memory`, `ask`, `record_outcome`, `remember`, `check_searchable`. An agent can recall a past fix, get a cited recommendation and record whether it worked, all without opening the UI. |
 | **Crash-safe tasks** | The worker claims tasks with a lease and commits a checkpoint and the step advance in one transaction. If the worker is killed mid-run, another worker resumes from the last checkpoint. |
@@ -78,6 +78,7 @@ Open http://localhost:5173. Demo auth signs you in automatically. It is **not pr
 | `npm run embed:backfill -w backend` | Embeds memories that are missing or have a stale embedding |
 | `npm run demo:reset -w backend` | Deletes non-seed data in the demo org only, then re-seeds |
 | `npm run demo:e2e -w backend` | Runs demo steps 1–6 through the API and prints the real results |
+| `npm run calibrate -w backend` | Measures Voyage similarity on the calibration question pairs and derives the outcome-policy thresholds |
 | `npm run benchmark -w backend` | Runs the labelled retrieval benchmark on the demo org, stores the run and prints the metrics table |
 | `npm run smoke -w mcp` | Starts the MCP server over stdio and runs recall → ask → record_outcome → check_searchable through a real MCP client |
 | `npm run screenshots -w frontend` | Playwright screenshots of every route and state at 1440, 1024 and 390 px |
@@ -105,16 +106,18 @@ The labels are in `backend/src/eval/benchmark-set.ts`, together with the labelli
 - **Isolation:** runs call the search code with no side effects (no retrieval logs, no retrieval counts), one query at a time.
 - **Scoring:** memories created after seeding have no labels, so they are left out of scoring, and the run reports how many were left out.
 
-Run of Oct 11, 2026 (24 questions, demo seed):
+Hybrid nDCG@5, Oct 11, 2026. There are 24 dev questions, plus 10 held-out questions committed before the contextual policy and not used to tune it:
 
-| | Hit@1 | MRR@10 | Recall@5 | nDCG@5 |
-|---|---|---|---|---|
-| Keyword (Atlas Search) | 62.5% | 0.727 | 72.7% | 0.738 |
-| Semantic (Vector Search) | 83.3% | 0.906 | 87.0% | 0.919 |
-| Hybrid RRF | 75.0% | 0.844 | 83.4% | 0.852 |
-| Hybrid RRF + outcome policy | 41.7% | 0.644 | 82.0% | 0.702 |
+| | Keyword | Semantic | Hybrid | Hybrid + global ×1.15 | Hybrid + contextual outcomes |
+|---|---|---|---|---|---|
+| Dev | 0.738 | 0.919 | 0.852 | 0.702 | 0.829 |
+| Held-out | 0.877 | 0.888 | 0.913 | 0.689 | 0.885 |
 
-The benchmark found a real problem: the ×1.15 outcome boost is larger than the gap between adjacent RRF scores (about 1.6%). It lifts verified procedures above the right answer for unrelated questions; see `docs/RANKING.md`. Re-run it after any ranking change; the Benchmarks page keeps the run history.
+The benchmark showed that the original outcome boost lifted verified procedures above the right answer for unrelated questions. The outcome policy is now **contextual**: an outcome only counts for questions similar to the one it was recorded on. The similarity thresholds were calibrated on separate question pairs (`npm run calibrate -w backend`).
+- **Effect:** this removes almost all of that damage; the top answer now moves on 3 questions instead of 21.
+- **Remaining gap:** it does not yet beat plain hybrid, because a recorded failure of "scale out" is demoted on questions where that failure is the useful answer.
+
+Details are in `docs/RANKING.md`.
 
 ## Environment
 

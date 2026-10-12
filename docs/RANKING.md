@@ -26,21 +26,40 @@ rrf(d) = Σ over modes m that returned d of  1 / (60 + rank_m(d))      (rank sta
 
 Only ranks are fused. Raw BM25 and cosine scores live on different scales and are **never added together**; they're kept per source in `sources` for display. A memory found by both modes outranks one found by a single mode at a similar rank. That difference is what the Retrieval Trace in the Search Playground draws.
 
-## Outcome policy
-Verified outcomes adjust the fused score:
+## Outcome policy (contextual)
+Verified outcomes adjust the fused score, but only for questions like the one the outcome was recorded on:
 
 ```
-final = rrf × (1 + 0.15 · s)
-s = +1  verification.status = verified_success
-s = −1  verification.status = verified_failure
-s =  0  otherwise
+final   = rrf × (1 + 0.15 · s · context)
+s       = +1 verified_success, −1 verified_failure, 0 otherwise
+context = clamp((cos(query, closest outcome question) − 0.61) / (0.71 − 0.61), 0, 1)
 ```
 
-- Only an explicit recorded outcome (`POST /api/tasks/:id/outcome`) can change `verification.status`. Nothing is inferred.
-- A procedure that once worked is not flipped to `verified_failure` by a later failure; the failure is recorded in `outcomeIds` instead.
-- The response returns `rrf`, `policyMultiplier`, `final` and `rankBeforePolicy`, so the effect is always visible.
-- `applyOutcomePolicy` (default `true`) can be switched off in the Playground to compare the two orderings.
-- 0.15 was chosen as a small weight, but the retrieval benchmark (`npm run benchmark -w backend`, Benchmarks page) measured that it is **not** small relative to RRF: adjacent ranks differ by only about 1.6% in RRF score, so a ×1.15 boost can lift a verified memory above the correct answer for an unrelated question. On the seed benchmark (run 2026-10-11) the policy moved the first direct answer up on 3 "what fixed this" queries and down on 12 others; see the Benchmarks page for the current numbers.
+- **The outcome question.** When an outcome is recorded, the question it answered (the task goal) is embedded with Voyage (`input_type: "query"`) and stored on the outcome. `seed` and `embed:backfill` embed older outcomes.
+- **The match.** At search time the query embedding (already computed for semantic search) is compared with the outcome questions behind each verified memory. Only outcomes that match the status count: worked outcomes for `verified_success`, failed ones for `verified_failure`. The closest one sets the context.
+- **Thresholds.** 0.61 and 0.71 come from `npm run calibrate -w backend`, which uses 24 question pairs in `src/eval/calibration-pairs.ts`. These pairs are unrelated to the seed data and the benchmark. The rule was fixed before measuring:
+  - low = the highest cosine of a different-problem pair (0.607);
+  - high = the median cosine of a same-problem pair (0.706).
+
+  The two groups did not overlap: the lowest same-problem pair scored 0.628. Rerun the calibration if the embedding model changes.
+- **No match, no signal.** If the semantic component didn't run, there is no query embedding, so no outcome signal is applied and the response says so. A verified memory whose outcome question isn't embedded gets no adjustment either.
+- **Explanations.** Each hybrid result explains the decision ("verified success on a similar question: closest outcome question …, similarity 0.95, weight 1.00" or "recorded on a different question"). It also returns `policyContext`, `rrf`, `policyMultiplier`, `final` and `rankBeforePolicy`.
+- **Verification rules.** Only an explicit recorded outcome (`POST /api/tasks/:id/outcome`) can change `verification.status`. A procedure that once worked is not flipped by a later failure; the failure is kept in `outcomeIds`.
+- **Comparison.** `applyOutcomePolicy` (default `true`) can be switched off in the Playground to compare orderings.
+
+### Why it changed (measured)
+The first policy was global: `final = rrf × (1 + 0.15·s)` for every query. The retrieval benchmark showed that ×1.15 is large compared with RRF, where adjacent ranks differ by about 1.6%. A verified procedure therefore jumped above the right answer even for unrelated questions.
+
+Ten held-out questions were committed (`528dd1d`) before the contextual policy was written. They were not used to choose its thresholds. Hybrid nDCG@5 on the seed benchmark (34 questions):
+
+| | no outcome signals | global ×1.15 | contextual |
+|---|---|---|---|
+| Dev (24) | 0.852 | 0.702 | 0.829 |
+| Held-out (10) | 0.913 | 0.689 | 0.885 |
+| Questions whose first direct answer moved | | 21 | 3 |
+
+- **What improved:** the contextual policy removes almost all of the collateral damage.
+- **What it does not do:** it does not beat plain hybrid on this benchmark. The remaining loss is the "should we scale out?" questions (one dev, one held-out). There, the recorded *failure* of scaling out is exactly what the asker needs, and the penalty for a verified failure pushes it down. Changing how failures are treated is a separate decision. It would have to be checked on new held-out questions, because these have now been seen.
 
 "Learning" here means updating persisted memories and these ranking signals. No model weights change.
 

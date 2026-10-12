@@ -25,6 +25,7 @@ import { toMemory } from '../lib/serialize.js';
 import { embedQuery, isVoyageConfigured } from './embeddings.js';
 import { logEvent, type Actor } from './events.js';
 import { applyOutcomePolicy, POLICY_WEIGHT, reciprocalRankFusion, type RankedList } from './rrf.js';
+import { outcomeContexts, type OutcomeContext } from './outcome-context.js';
 
 export interface SearchOptions {
   query: string;
@@ -178,7 +179,7 @@ async function runKeyword(orgId: ObjectId, o: SearchOptions, limit: number): Pro
   return { mode: 'keyword', engine, hits, results: [], latencyMs: { keyword: ms(start), total: ms(start) }, warnings };
 }
 
-async function runSemantic(orgId: ObjectId, o: SearchOptions, limit: number): Promise<ModeRun & { embedCached?: boolean }> {
+async function runSemantic(orgId: ObjectId, o: SearchOptions, limit: number): Promise<ModeRun & { embedCached?: boolean; queryVector?: number[] }> {
   const start = now();
   const warnings: string[] = [];
   const unavailable = (reason: string): ModeRun => ({
@@ -243,6 +244,7 @@ async function runSemantic(orgId: ObjectId, o: SearchOptions, limit: number): Pr
     latencyMs: { embed: embedMs, vector: ms(vecStart), total: ms(start) },
     warnings,
     embedCached: cached,
+    queryVector: vector,
   };
 }
 
@@ -335,23 +337,39 @@ async function hybrid(orgId: ObjectId, o: SearchOptions): Promise<SearchResponse
   for (const h of [...kw.hits, ...sem.hits]) if (!docs.has(String(h._id))) docs.set(String(h._id), h);
   const kwById = new Map(kw.hits.map((h) => [String(h._id), h]));
   const fused = reciprocalRankFusion(lists);
-  const ranked = applyOutcomePolicy(fused, (id) => docs.get(id)!.verification.status as VerificationStatus, o.applyOutcomePolicy).slice(0, o.limit);
+  // Contextual outcome policy: a verified outcome only counts for questions similar to the one it was
+  // recorded on, measured against the query embedding the semantic component already computed.
+  const contexts: Map<string, OutcomeContext> =
+    o.applyOutcomePolicy && 'queryVector' in sem && sem.queryVector ? await outcomeContexts(orgId, sem.queryVector, [...docs.values()]) : new Map();
+  const ranked = applyOutcomePolicy(
+    fused,
+    (id) => docs.get(id)!.verification.status as VerificationStatus,
+    o.applyOutcomePolicy,
+    (id) => contexts.get(id)?.weight ?? 0,
+  ).slice(0, o.limit);
   const fuseMs = ms(fuseStart);
 
   // Component warnings stay on their own columns; the hybrid response says how they affected fusion.
   const warnings: string[] = [];
   if (sem.engine === 'unavailable') warnings.push(`Hybrid degraded to keyword-only: ${sem.warnings[0] ?? 'the semantic component did not run.'}`);
   if (kw.engine === 'fallback_regex') warnings.push('Hybrid keyword component used the regex fallback, not Atlas Search.');
+  if (o.applyOutcomePolicy && sem.engine === 'unavailable') warnings.push('Outcome policy not applied: matching outcomes to this question needs the query embedding.');
 
   const results: SearchResult[] = ranked.map((r) => {
     const doc = docs.get(r.id)!;
     const status = doc.verification.status;
-    const policyNote =
-      r.multiplier === 1
-        ? o.applyOutcomePolicy
-          ? 'no outcome adjustment (unverified)'
-          : 'outcome policy off'
-        : `× ${r.multiplier.toFixed(2)} (${status === 'verified_success' ? 'verified success' : 'verified failure'})`;
+    const ctx = contexts.get(r.id);
+    const kind = status === 'verified_success' ? 'verified success' : 'verified failure';
+    const closest = ctx ? `closest outcome question "${ctx.question.length > 90 ? `${ctx.question.slice(0, 89)}…` : ctx.question}", similarity ${ctx.similarity.toFixed(2)}` : '';
+    const policyNote = !o.applyOutcomePolicy
+      ? 'outcome policy off'
+      : status === 'unverified'
+        ? 'no outcome adjustment (unverified)'
+        : r.multiplier === 1
+          ? ctx
+            ? `no adjustment: ${kind} was recorded on a different question (${closest})`
+            : `no adjustment: ${kind}, but no outcome question to compare with`
+          : `× ${r.multiplier.toFixed(3)} (${kind} on a similar question: ${closest}, weight ${ctx!.weight.toFixed(2)})`;
     const parts = r.sources.map((s) => `${s.mode === 'keyword' ? 'Keyword' : 'Semantic'} rank ${s.rank}`);
     return {
       memory: toMemory(doc),
@@ -364,12 +382,13 @@ async function hybrid(orgId: ObjectId, o: SearchOptions): Promise<SearchResponse
       policyMultiplier: r.multiplier,
       final: r.final,
       rankBeforePolicy: r.rankBeforePolicy,
+      ...(ctx ? { policyContext: { similarity: Math.round(ctx.similarity * 1000) / 1000, weight: Math.round(ctx.weight * 1000) / 1000, question: ctx.question } } : {}),
       explanation: {
         summary: `${parts.join(' · ')} → RRF ${r.rrf.toFixed(4)} → final ${r.final.toFixed(4)}`,
         details: [
           ...r.sources.map((s) => `${s.mode === 'keyword' ? 'Keyword' : 'Semantic'}: rank ${s.rank}, contributes 1/(60+${s.rank}) = ${(1 / (60 + s.rank)).toFixed(4)}`),
           r.sources.length === 1 ? `Found by ${r.sources[0]!.mode} only` : 'Found by both modes',
-          `Outcome policy: ${policyNote}; final = rrf × (1 + ${POLICY_WEIGHT}·s)`,
+          `Outcome policy: ${policyNote}; final = rrf × (1 + ${POLICY_WEIGHT}·s·context)`,
           ...(r.rankBeforePolicy !== r.rank ? [`Moved from rank ${r.rankBeforePolicy} to ${r.rank} by the outcome policy`] : []),
         ],
       },

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { closeMongo } from '../src/db/client.js';
 import { createAgent } from '../src/services/agents.js';
 import { createMemory } from '../src/services/memories.js';
@@ -7,7 +7,9 @@ import { systemActor } from '../src/services/events.js';
 import { isVoyageConfigured } from '../src/services/embeddings.js';
 import { indexAvailability, search, type SearchOptions } from '../src/services/search.js';
 import { searchability } from '../src/services/memory-insights.js';
-import { retrievalLogsRepo } from '../src/db/repositories/index.js';
+import { memoriesRepo, outcomesRepo, retrievalLogsRepo } from '../src/db/repositories/index.js';
+import { embedOutcomeQuestion } from '../src/services/outcome-context.js';
+import { POLICY_WEIGHT } from '../src/services/rrf.js';
 import { announceSkip, atlasAvailability, cleanTestOrgs, testOrgs } from './helpers.js';
 
 const atlas = await atlasAvailability();
@@ -47,6 +49,20 @@ describe.skipIf(Boolean(reason))('search modes against Atlas (__test__ org)', ()
     await mk('fix', 'Fix connection pool exhaustion', 'Raise maxPoolSize, set minPoolSize, raise waitQueueTimeoutMS, close cursors, alert on pool checkout failures.', 'procedural', true);
     await mk('hung', 'Billing service hung under load after a driver config tweak', 'Requests piled up waiting on the data layer after the database client settings were trimmed; reverting fixed it.', 'episodic');
     await mk('unrelated', 'Quarterly offsite catering order', 'Ordered sandwiches and salads for forty people.', 'semantic');
+    // The fix was verified by an outcome recorded on a similar question; the contextual policy compares
+    // the search query with that question's embedding.
+    const outcome = await outcomesRepo.insertOne(org, {
+      taskId: new ObjectId(),
+      agentId: agent._id,
+      result: 'worked',
+      feedback: 'helpful',
+      notes: '',
+      citedMemoryIds: [new ObjectId(ids.fix)],
+      createdMemoryId: null,
+      userId: new ObjectId(),
+    });
+    expect(await embedOutcomeQuestion(org, outcome._id, 'The API keeps timing out since we changed the database connection pool. What fixed it last time?')).toBe(true);
+    await memoriesRepo.updateById(org, ids.fix!, { $set: { 'verification.outcomeIds': [outcome._id] } });
     // A memory in another tenant that must never appear.
     const otherAgent = await createAgent(other, { name: 'Other tenant agent' }, systemActor);
     await createMemory(other, { agentId: otherAgent._id.toHexString(), title: 'API timed out after connection pool change (other org)', content: 'pool timeout', type: 'episodic', tags: [] }, systemActor);
@@ -86,7 +102,7 @@ describe.skipIf(Boolean(reason))('search modes against Atlas (__test__ org)', ()
     expect(r.latencyMs.embed).toBeDefined();
   });
 
-  it('hybrid fuses both with RRF and the outcome policy lifts the verified fix', async () => {
+  it('hybrid fuses both with RRF and the outcome policy lifts the fix verified on a similar question', async () => {
     const on = await search(org, 'hybrid', opts(), systemActor, null);
     const off = await search(org, 'hybrid', opts({ applyOutcomePolicy: false }), systemActor, null);
     expect(on.engine).toBe('rrf');
@@ -94,14 +110,24 @@ describe.skipIf(Boolean(reason))('search modes against Atlas (__test__ org)', ()
     expect(on.components?.semantic.engine).toBe('atlas_vector_search');
     const fixOn = on.results.find((x) => x.memory.id === ids.fix)!;
     const fixOff = off.results.find((x) => x.memory.id === ids.fix)!;
-    expect(fixOn.policyMultiplier).toBeCloseTo(1.15);
-    expect(fixOn.final).toBeCloseTo(fixOn.rrf! * 1.15, 10);
+    expect(fixOn.policyContext?.weight).toBeGreaterThan(0);
+    expect(fixOn.policyMultiplier).toBeCloseTo(1 + POLICY_WEIGHT * fixOn.policyContext!.weight, 3);
+    expect(fixOn.final).toBeCloseTo(fixOn.rrf! * fixOn.policyMultiplier!, 10);
     expect(fixOff.final).toBe(fixOff.rrf);
     expect(fixOn.rank).toBeLessThanOrEqual(fixOff.rank);
     for (const x of on.results) {
       const expected = x.sources.reduce((s, src) => s + 1 / (60 + src.rank), 0);
       expect(x.rrf).toBeCloseTo(expected, 12);
     }
+  });
+
+  it('does not apply the outcome to an unrelated question', async () => {
+    const r = await search(org, 'hybrid', opts({ query: 'How should the billing service settings be reverted after it hung under load?' }), systemActor, null);
+    const fix = r.results.find((x) => x.memory.id === ids.fix);
+    expect(fix).toBeDefined();
+    expect(fix!.policyContext!.similarity).toBeLessThan(0.71);
+    expect(fix!.policyMultiplier).toBeCloseTo(1 + POLICY_WEIGHT * fix!.policyContext!.weight, 10);
+    expect(fix!.policyMultiplier!).toBeLessThan(1.15);
   });
 
   it('concurrent runs of one worker step log the retrieval exactly once', async () => {

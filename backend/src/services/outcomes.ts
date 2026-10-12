@@ -7,6 +7,7 @@ import { AppError, notFound } from '../lib/errors.js';
 import { toMemory } from '../lib/serialize.js';
 import { logEvent, type Actor } from './events.js';
 import { createMemory, embedMemory } from './memories.js';
+import { embedOutcomeQuestion } from './outcome-context.js';
 
 const stripCitations = (s: string) => s.replace(/\s*\[mem:[a-f0-9]{24}\]/g, '').trim();
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -156,6 +157,9 @@ export async function recordOutcome(
   }
   await outcomesRepo.updateById(orgId, outcomeId!, { $set: { createdMemoryId: created._id } });
   void embedMemory(orgId, created).catch(() => {});
+  // The question this outcome answered: the contextual outcome policy only applies the outcome to
+  // similar questions. Usually a cache hit (the question was just searched); failure only drops the signal.
+  await embedOutcomeQuestion(orgId, outcomeId!, task.goal);
 
   // 5. Events.
   await logEvent(orgId, {

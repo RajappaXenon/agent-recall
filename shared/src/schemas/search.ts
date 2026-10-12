@@ -57,6 +57,8 @@ export const SearchResultSchema = z.object({
   final: z.number().optional(),
   /** Hybrid only: rank before the outcome policy was applied. */
   rankBeforePolicy: z.number().int().optional(),
+  /** Hybrid, verified memories: how close this query is to the question the outcome was recorded on. */
+  policyContext: z.object({ similarity: z.number(), weight: z.number(), question: z.string() }).optional(),
 });
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 

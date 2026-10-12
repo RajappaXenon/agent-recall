@@ -4,6 +4,22 @@ import type { VerificationStatus } from '@agent-recall/shared';
 export const RRF_K = 60;
 /** Outcome policy strength: final = rrf × (1 + POLICY_WEIGHT · s). See docs/RANKING.md. */
 export const POLICY_WEIGHT = 0.15;
+/** Recorded on benchmark runs so before/after comparisons name the policy that produced them. */
+export const OUTCOME_POLICY_NAME = 'contextual-v1';
+
+/**
+ * Contextual outcome policy: an outcome only counts for questions like the one it was recorded on.
+ * context = clamp((cos(query, closest outcome question) − LOW) / (HIGH − LOW), 0, 1).
+ * Thresholds come from `npm run calibrate -w backend` (src/eval/calibration-pairs.ts, independent of
+ * the benchmark) with a fixed rule: LOW = highest cosine of a different-problem pair (0.607),
+ * HIGH = median cosine of a same-problem pair (0.706), voyage-3.5 / 1024 dims, query input type.
+ */
+export const CONTEXT_LOW = 0.61;
+export const CONTEXT_HIGH = 0.71;
+
+export function contextWeight(similarity: number): number {
+  return Math.min(1, Math.max(0, (similarity - CONTEXT_LOW) / (CONTEXT_HIGH - CONTEXT_LOW)));
+}
 
 export type SourceMode = 'keyword' | 'semantic';
 
@@ -20,6 +36,8 @@ export interface Fused {
 }
 
 export interface PolicyApplied extends Fused {
+  /** 0–1 share of the outcome signal that applied (1 for the non-contextual form). */
+  context: number;
   multiplier: number;
   final: number;
   rankBeforePolicy: number;
@@ -63,15 +81,36 @@ export function policySignal(status: VerificationStatus): -1 | 0 | 1 {
 }
 
 /**
- * Outcome policy: final = rrf × (1 + 0.15·s), s = +1 verified success, −1 verified failure, 0 otherwise.
- * When disabled, final = rrf (multiplier 1). Returns items re-ranked by final.
+ * Outcome policy: final = rrf × (1 + 0.15·s·c), s = +1 verified success, −1 verified failure, 0 otherwise,
+ * c = contextOf(id) in [0, 1] (how close this query is to the questions the outcome was recorded on;
+ * omitted ⇒ 1, the original global form). When disabled, final = rrf. Returns items re-ranked by final.
  */
-export function applyOutcomePolicy(fused: Fused[], statusOf: (id: string) => VerificationStatus, enabled: boolean): PolicyApplied[] {
+export function applyOutcomePolicy(
+  fused: Fused[],
+  statusOf: (id: string) => VerificationStatus,
+  enabled: boolean,
+  contextOf: (id: string) => number = () => 1,
+): PolicyApplied[] {
   const withRank = fused.map((f, i) => {
-    const multiplier = enabled ? 1 + POLICY_WEIGHT * policySignal(statusOf(f.id)) : 1;
-    return { ...f, multiplier, final: f.rrf * multiplier, rankBeforePolicy: i + 1, rank: 0 };
+    const s = enabled ? policySignal(statusOf(f.id)) : 0;
+    const context = s === 0 ? 0 : contextOf(f.id);
+    const multiplier = 1 + POLICY_WEIGHT * s * context;
+    return { ...f, context, multiplier, final: f.rrf * multiplier, rankBeforePolicy: i + 1, rank: 0 };
   });
   withRank.sort((a, b) => b.final - a.final || a.rankBeforePolicy - b.rankBeforePolicy);
   withRank.forEach((r, i) => (r.rank = i + 1));
   return withRank;
+}
+
+/** Cosine similarity of two equal-length vectors (0 when either is all zeros). */
+export function cosine(a: number[], b: number[]): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * b[i]!;
+    na += a[i]! * a[i]!;
+    nb += b[i]! * b[i]!;
+  }
+  return na && nb ? dot / Math.sqrt(na * nb) : 0;
 }

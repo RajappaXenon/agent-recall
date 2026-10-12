@@ -108,6 +108,9 @@ export interface OutcomeDoc extends BaseDoc {
   citedMemoryIds: ObjectId[];
   createdMemoryId: ObjectId | null;
   userId: ObjectId;
+  /** The question the outcome answered (task goal) and its query embedding, for the contextual outcome policy. */
+  question?: string;
+  questionEmbedding?: { vector: number[]; model: string; dimensions: number; embeddedAt: Date } | null;
 }
 
 export interface RetrievalLogDoc extends BaseDoc {
@@ -144,6 +147,7 @@ export interface BenchmarkMetrics {
 
 export interface BenchmarkRunDoc extends BaseDoc {
   version: string;
+  rankingPolicy?: string;
   userId: ObjectId | null;
   durationMs: number;
   corpus: { seedMemories: number; nonSeedMemories: number; missingSeedKeys: string[] };
@@ -151,9 +155,11 @@ export interface BenchmarkRunDoc extends BaseDoc {
   warnings: string[];
   overall: Record<BenchmarkConfig, BenchmarkMetrics>;
   byCategory: Record<string, { queries: number; metrics: Record<BenchmarkConfig, BenchmarkMetrics> }>;
+  bySplit?: Record<string, { queries: number; metrics: Record<BenchmarkConfig, BenchmarkMetrics> }>;
   latencyMs: Record<'keyword' | 'semantic' | 'hybrid', { p50: number; p95: number }>;
   queries: {
     id: string;
+    split?: 'dev' | 'holdout';
     category: string;
     query: string;
     relevantCount: number;
