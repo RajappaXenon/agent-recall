@@ -158,7 +158,7 @@ function RunStrip({ run }: { run: BenchmarkRun | undefined }) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-dense text-text-muted">
         <span className="text-text">Run {new Date(run.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
         <span className="tabular">{run.queryCount} questions</span>
-        <span className="tabular">{run.corpus.seedMemories} labelled memories</span>
+        <span className="tabular">{run.corpus.seedMemories} seed memories</span>
         <span className="tabular">{(run.durationMs / 1000).toFixed(1)} s</span>
         <span>{POLICY_LABEL[run.rankingPolicy] ?? run.rankingPolicy}</span>
         <EngineBadge engine={run.engines.keyword} />

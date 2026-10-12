@@ -514,3 +514,24 @@ screenshots         → 46 captured, no "did not appear" warnings (React Router 
    - tests: backend 58/58 (contextual unit tests, plus Atlas integration tests for a similar question boosting and an unrelated one not); frontend 2/2;
    - build ok;
    - Benchmarks page: 0 console errors, 390 px mobile without overflow.
+
+## More demo data (2026-10-11)
+
+- **Seed size:** now 59 memories, 13 outcomes and 4 agents (previously 26, 2 and 3).
+- **New content:** `backend/src/scripts/seed-data-incidents.ts` adds a **Support Agent** and 11 new incident stories. Each story has an incident and a fix procedure; most also have a root cause, a verified outcome and a resolution.
+  - Topics: Kafka rebalance, Kubernetes OOMKilled (native memory), expired TLS certificate, duplicate payment webhooks, HTTP 429 behind a shared NAT, MongoDB WriteConflict, Safari 15 blank page, daylight-saving flaky tests, leaked cloud key, CDN cost spike, duplicate cron runs.
+  - Also a taxonomy of incident triggers and a chunking note.
+  - Two stories have an attempt verified as failed (raising the memory limit; adding Kafka partitions).
+  - Topics avoid the benchmark questions, so the labels stay valid.
+- **Test:** `test/seed-data.test.ts` checks unique keys, valid links, and that every verified memory is backed by a matching outcome (the contextual policy needs its question).
+- **Live check:** 11 paraphrased questions, one per story, returned the story's incident or fix at rank 1 in hybrid search. Listed in `docs/DEMO.md` under "More scenarios".
+- **Failed attempts:** for "should we raise the memory limit / add partitions?", the failed procedure (rank 1 without the policy) drops below the verified fix with the policy on. This is the known trade-off, and it's documented.
+- **Benchmark on the larger corpus** (contextual-v1), hybrid nDCG@5:
+
+  | | Hybrid | Hybrid + outcomes |
+  |---|---|---|
+  | Dev | 0.819 | 0.795 |
+  | Held-out | 0.899 | 0.872 |
+
+  Keyword dips slightly with more distractors and semantic is unchanged. Not directly comparable to the 26-memory runs; each run records its corpus size.
+- **Checks:** lint clean; typecheck clean; tests backend 61/61, frontend 2/2; build ok. Overview, Agents, Learning and Benchmarks screenshots show 0 console errors. Demo data reset after probing.

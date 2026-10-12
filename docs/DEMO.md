@@ -61,6 +61,30 @@ This is a click-by-click walkthrough of the demo story in SPEC §0. Every number
 - **Overview** shows every number computed from Atlas, with "Demo + live" badges once live data exists.
 - **Activity Log** shows the whole story as an audit trail: searches, the answer, the outcome, verification, the crash and the resume.
 
+## More scenarios (swap one in for variety)
+
+The seed has 12 more incident stories beyond the pool timeout. Each has an incident and a fix procedure; most also have a root cause, a verified outcome and a resolution, and two have an attempt that failed. A fourth agent, **Support Agent**, owns the customer-reported ones.
+
+Every question below is worded differently from its memories. All were run through hybrid search on 2026-10-11, and the incident or its fix came back at rank 1.
+
+| Kind of issue | Ask this (Search Playground, Run all) | What comes back first |
+|---|---|---|
+| Streaming / Kafka | *Our event stream consumers keep getting kicked out of the group and the backlog explodes. How did we fix that?* | Kafka rebalance resolution, incident and fix procedure (verified) |
+| Kubernetes memory | *Containers restart with exit code 137 even though the heap snapshot looks small* | Native-memory OOMKilled fix (verified), then the incident |
+| TLS / expiry | *Partners cannot connect, they say our HTTPS cert is no longer valid* | Certificate resolution, the 47-minute outage, the renewal runbook |
+| Payments / duplicates | *A shopper paid once but the card shows two charges* | Idempotent webhook fix (verified) and the double-charge incident |
+| API rate limiting | *One corporate customer gets too many requests errors for every employee* | The HTTP 429 / shared-NAT incident, then "rate limit by API key" |
+| MongoDB transactions | *Stock reservation calls error out under heavy concurrent sales on Mongo transactions* | WriteConflict flash-sale incident and the withTransaction runbook |
+| Frontend compatibility | *After the latest deploy iPhone users on old iOS just see an empty screen* | Safari 15 blank checkout (regex lookbehind) |
+| Flaky CI | *Tests only fail one weekend in spring and pass on retry* | Daylight-saving billing tests and the fake-clock procedure |
+| Security | *Someone committed an AWS secret to GitHub, what do we do right now?* | Leaked-key incident and the credential response runbook |
+| Cloud cost | *Why did our CDN bandwidth bill jump so much this month?* | Egress bill tripled after cache busting, then the CDN cache procedure |
+| Scheduling | *Nightly job sends every customer two copies of the same email* | Duplicate invoice emails and "run a job exactly once" |
+
+**Learning from a failed attempt.** Ask *"Pods keep crashing out of memory, should we just raise the memory limit?"* With the outcome policy off, "Raise the memory limit when pods are OOMKilled" ranks near the top. With it on, that procedure was verified as a **failure** on a very similar question, so it drops. The verified native-memory fix moves to #1, and "Why this result" quotes the earlier question and its similarity. *"Lag on our Kafka topic is huge, would more partitions help?"* behaves the same way.
+
+To show a fix that worked, ask an answer task and record **Worked**. The same question asked again then ranks that fix higher, and other kinds of questions are unaffected.
+
 ## If something goes wrong
 
 | Symptom | Fix |

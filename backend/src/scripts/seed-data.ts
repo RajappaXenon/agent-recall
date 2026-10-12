@@ -1,4 +1,5 @@
 import type { MemoryType, VerificationStatus } from '@agent-recall/shared';
+import { INCIDENT_MEMORIES, INCIDENT_OUTCOMES } from './seed-data-incidents.js';
 
 /**
  * Demo seed (SPEC §13). Everything here is written with isSeed: true and shown
@@ -6,7 +7,7 @@ import type { MemoryType, VerificationStatus } from '@agent-recall/shared';
  * texts going through real Atlas Search / Vector Search, not from arranged results.
  */
 
-export type AgentKey = 'research' | 'engineering' | 'operations';
+export type AgentKey = 'research' | 'engineering' | 'operations' | 'support';
 
 export const SEED_AGENTS: Record<AgentKey, { name: string; description: string }> = {
   research: {
@@ -16,6 +17,10 @@ export const SEED_AGENTS: Record<AgentKey, { name: string; description: string }
   engineering: {
     name: 'Engineering Assistant',
     description: 'Helps engineers debug production incidents and applies proven fixes from past experience.',
+  },
+  support: {
+    name: 'Support Agent',
+    description: 'Triages customer-reported problems, links them to known incidents and tracks customer-facing fixes.',
   },
   operations: {
     name: 'Operations Analyst',
@@ -35,6 +40,19 @@ export interface SeedMemory {
   relations?: { to: string; label: string }[];
   helpful?: number;
   notHelpful?: number;
+}
+
+export interface SeedOutcome {
+  key: string;
+  agent: AgentKey;
+  query: string;
+  answer: string;
+  result: 'worked' | 'failed';
+  feedback: 'helpful' | 'not_helpful';
+  notes: string;
+  cited: string[];
+  createdMemory: string | null;
+  daysAgo: number;
 }
 
 export const SEED_MEMORIES: SeedMemory[] = [
@@ -327,10 +345,11 @@ export const SEED_MEMORIES: SeedMemory[] = [
     daysAgo: 28,
     relations: [],
   },
+  ...INCIDENT_MEMORIES,
 ];
 
 /** Seeded outcomes: the verified procedure and the failed scale-out runbook. */
-export const SEED_OUTCOMES = [
+export const SEED_OUTCOMES: SeedOutcome[] = [
   {
     key: 'outcome-pool-fix',
     agent: 'engineering' as AgentKey,
@@ -356,4 +375,5 @@ export const SEED_OUTCOMES = [
     createdMemory: null,
     daysAgo: 57,
   },
+  ...INCIDENT_OUTCOMES,
 ];

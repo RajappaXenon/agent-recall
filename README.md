@@ -61,7 +61,7 @@ Requirements: Node 20 or later and a MongoDB Atlas cluster. Voyage, Anthropic an
 npm install
 cp .env.example .env            # fill MONGODB_URI, DB_NAME, VOYAGE_API_KEY (+ LLM_API_KEY, ELEVENLABS_* optional)
 npm run setup:indexes -w backend    # creates search + vector indexes, waits until queryable
-npm run seed -w backend             # demo org, 3 agents, 26 memories, 2 seeded outcomes (isSeed: true)
+npm run seed -w backend             # demo org, 4 agents, 59 memories across 13 incident stories, 13 seeded outcomes (isSeed: true)
 npm run dev                         # API on :4000, web on :5173
 npm run worker:supervised -w backend   # task worker (restarts after a crash, for the demo)
 ```
