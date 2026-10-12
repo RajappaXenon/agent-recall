@@ -63,7 +63,7 @@ This is a click-by-click walkthrough of the demo story in SPEC §0. Every number
 
 ## More scenarios (swap one in for variety)
 
-The seed has 12 more incident stories beyond the pool timeout. Each has an incident and a fix procedure; most also have a root cause, a verified outcome and a resolution, and two have an attempt that failed. A fourth agent, **Support Agent**, owns the customer-reported ones.
+The seed has 11 more incident stories beyond the pool timeout. Each has an incident and a fix procedure; most also have a root cause, a verified outcome and a resolution, and two have an attempt that failed. A fourth agent, **Support Agent**, owns the customer-reported ones.
 
 Every question below is worded differently from its memories. All were run through hybrid search on 2026-10-11, and the incident or its fix came back at rank 1.
 
