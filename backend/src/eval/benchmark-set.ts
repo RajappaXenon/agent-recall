@@ -9,6 +9,11 @@
  *   unlabelled = not relevant
  * Memories are referenced by seed key, so the set is stable across `demo:reset`.
  *
+ * Splits:
+ *   dev      the first 24 questions; the outcome-policy problem was found on these
+ *   holdout  written and committed before the contextual outcome policy existed, never used
+ *            to choose its parameters; report them separately to check the change generalises
+ *
  * Categories:
  *   paraphrase  the question shares few or no distinctive words with the answer
  *   identifier  the question hinges on an exact token: error name, config key, code
@@ -16,14 +21,17 @@
  */
 export type BenchmarkCategory = 'paraphrase' | 'identifier' | 'fix';
 
+export type BenchmarkSplit = 'dev' | 'holdout';
+
 export interface BenchmarkQuery {
   id: string;
+  split?: BenchmarkSplit;
   category: BenchmarkCategory;
   query: string;
   relevant: Record<string, 1 | 3>;
 }
 
-export const BENCHMARK_VERSION = 'seed-v1';
+export const BENCHMARK_VERSION = 'seed-v2';
 
 export const BENCHMARK_QUERIES: BenchmarkQuery[] = [
   // ── fix ──
@@ -174,5 +182,77 @@ export const BENCHMARK_QUERIES: BenchmarkQuery[] = [
     category: 'identifier',
     query: 'SEV2 definition',
     relevant: { 'tax-severity': 3 },
+  },
+
+  // ── holdout (committed before the contextual outcome policy was written) ──
+  {
+    id: 'ho-fix-inventory-waitqueue',
+    split: 'holdout',
+    category: 'fix',
+    query: 'Our inventory service throws wait queue timeout errors since a config change cut its connection limit. What resolved this previously?',
+    relevant: { 'proc-pool-fix': 3, 'ep-pool-resolution': 3, 'sem-pool-error': 1, 'ep-pool-rootcause': 1 },
+  },
+  {
+    id: 'ho-fix-double-pods',
+    split: 'holdout',
+    category: 'fix',
+    query: 'Search API p99 creeps past its SLO at peak. Is doubling the pods a good idea?',
+    relevant: { 'proc-scale-out': 3, 'ep-campaign-peak': 1, 'sem-checkout-slo': 1 },
+  },
+  {
+    id: 'ho-fix-disk-alerts',
+    split: 'holdout',
+    category: 'fix',
+    query: 'Too many low-value disk alerts wake people up at night. What threshold change worked?',
+    relevant: { 'ep-alert-noise': 3 },
+  },
+  {
+    id: 'ho-para-egress-ip',
+    split: 'holdout',
+    category: 'paraphrase',
+    query: 'Pods could not connect to the managed database after the outbound IP address changed',
+    relevant: { 'ep-atlas-ip': 3, 'sem-server-selection': 1, 'tax-db-connectivity': 1 },
+  },
+  {
+    id: 'ho-para-resolver',
+    split: 'holdout',
+    category: 'paraphrase',
+    query: 'Name lookups for an external provider fail intermittently after we changed the network resolver',
+    relevant: { 'ep-dns-timeout': 3 },
+  },
+  {
+    id: 'ho-para-index-check',
+    split: 'holdout',
+    category: 'paraphrase',
+    query: 'A query scans the whole collection. How do I confirm which index it actually uses?',
+    relevant: { 'proc-slow-query': 3 },
+  },
+  {
+    id: 'ho-para-question-vs-passage',
+    split: 'holdout',
+    category: 'paraphrase',
+    query: 'Why does an embedding model need to know whether the text is a question or a passage?',
+    relevant: { 'sem-input-type': 3 },
+  },
+  {
+    id: 'ho-para-cpu-threads',
+    split: 'holdout',
+    category: 'paraphrase',
+    query: 'Jobs time out when every worker thread is blocked on CPU-heavy dataframe code',
+    relevant: { 'ep-threadpool': 3 },
+  },
+  {
+    id: 'ho-id-checkout-failed',
+    split: 'holdout',
+    category: 'identifier',
+    query: 'ConnectionCheckOutFailed alert',
+    relevant: { 'proc-pool-fix': 3, 'sem-pool-error': 1 },
+  },
+  {
+    id: 'ho-id-rdb-etimedout',
+    split: 'holdout',
+    category: 'identifier',
+    query: 'RDB snapshot ETIMEDOUT',
+    relevant: { 'ep-redis-timeout': 3 },
   },
 ];
