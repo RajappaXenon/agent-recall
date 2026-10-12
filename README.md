@@ -53,6 +53,16 @@ docs/      SPEC.md  DESIGN.md  RANKING.md  DEMO.md  ATLAS_SETUP.md
 
 Every database read and write goes through repositories that require `orgId`. Integration tests run inside a dedicated `__test__` organization in the same collections, because search indexes are per collection.
 
+Each module has its own README with setup, layout, data flow and common tasks:
+
+| Module | README | In one line |
+|---|---|---|
+| API, worker, scripts | [backend/README.md](backend/README.md) | Fastify API, search and ranking, answers, outcomes, crash-safe worker, seed and benchmark scripts |
+| Web app | [frontend/README.md](frontend/README.md) | React screens, design system, how data is fetched |
+| API contract | [shared/README.md](shared/README.md) | Zod schemas and types used by both sides |
+| MCP server | [mcp/README.md](mcp/README.md) | Agent Recall as memory for Claude Code and other MCP clients |
+| Demo video | [demo-video/README.md](demo-video/README.md) | How the 60-second tutorial was recorded and built |
+
 ## Run it locally
 
 Requirements: Node 20 or later and a MongoDB Atlas cluster. Voyage, Anthropic and ElevenLabs keys are optional, but semantic search needs Voyage.
